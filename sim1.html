@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CARDIA — Interactive Human Heart &amp; Circulation Simulator</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Tone.js for optional synthesized Lub-Dub cardiac audio -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              deep: '#320583',
+              purple: '#6c44bb',
+              sage: '#426843',
+              blue: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom minimalist styling & subtle interactive transitions */
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Subtle clinical dot-grid canvas background */
+    .clinical-grid {
+      background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* Interactive SVG anatomical region states */
+    .heart-part {
+      cursor: pointer;
+      transition: filter 0.22s ease, opacity 0.22s ease, stroke-width 0.22s ease;
+    }
+
+    .heart-part:hover {
+      filter: drop-shadow(0 0 10px rgba(108, 68, 187, 0.55));
+    }
+
+    .heart-part.selected {
+      filter: drop-shadow(0 0 14px rgba(50, 5, 131, 0.75));
+      stroke: #320583 !important;
+      stroke-width: 3.5px !important;
+    }
+
+    /* Custom range slider styled with user palette */
+    input[type="range"].cardia-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      outline: none;
+    }
+
+    input[type="range"].cardia-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #320583;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(50, 5, 131, 0.35);
+      cursor: pointer;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
+    input[type="range"].cardia-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      background: #6c44bb;
+    }
+
+    /* Smooth scrollbar for anatomical selector pills */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Subtle pulse badge animation */
+    @keyframes softPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.65; transform: scale(1.15); }
+    }
+    .animate-soft-pulse {
+      animation: softPulse 1.6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-[#6c44bb] selection:text-white">
+
+  <!-- Top Minimal Navigation Header -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand Identity -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#320583] to-[#6c44bb] flex items-center justify-center shadow-sm shadow-[#320583]/25">
+          <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+            <path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900">CARDIA</h1>
+            <span class="hidden sm:inline-block text-[11px] font-mono font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#320583]/10 text-[#320583]">
+              3D-Vector Atlas
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 hidden sm:block">Interactive Cardiac Anatomy &amp; Hemodynamic Flow</p>
+        </div>
+      </div>
+
+      <!-- Status Telemetry & Legend -->
+      <div class="flex items-center gap-2 sm:gap-4">
+        <!-- Blood Oxygenation Key -->
+        <div class="hidden md:flex items-center gap-3 text-xs font-medium text-slate-600 bg-slate-100/80 px-3 py-1.5 rounded-full border border-slate-200/70">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
+            Deoxygenated (O₂-Poor)
+          </span>
+          <span class="text-slate-300">|</span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span>
+            Oxygenated (O₂-Rich)
+          </span>
+        </div>
+
+        <!-- Live Rhythm Pill styled with user's #426843 Sage Green -->
+        <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#426843]/12 border border-[#426843]/30 text-[#426843] text-xs font-semibold">
+          <span id="statusDot" class="w-2 h-2 rounded-full bg-[#426843]"></span>
+          <span id="statusText">STANDBY • 72 BPM</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Interactive Simulator Layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT COLUMN (7 cols on lg): Interactive Heart & Systemic Circulation Viewport -->
+      <section class="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col">
+        
+        <!-- Top Interactive Control Bar -->
+        <div class="p-4 sm:px-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
+          
+          <!-- Play / Pause Primary Action -->
+          <div class="flex items-center gap-2.5">
+            <button id="playToggleBtn" type="button"
+              class="group inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-[#320583] to-[#6c44bb] hover:from-[#260366] hover:to-[#5b35a6] shadow-md shadow-[#320583]/20 active:scale-[0.98] transition-all cursor-pointer">
+              <span id="playIcon" class="flex items-center justify-center">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+              <span id="playBtnLabel">Start Pumping</span>
+            </button>
+
+            <!-- Audio Lub-Dub Toggle -->
+            <button id="audioToggleBtn" type="button" title="Toggle Heartbeat Audio"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-full text-xs font-semibold border border-slate-200 text-slate-600 hover:border-[#6c44bb] hover:text-[#320583] bg-slate-50 transition-colors cursor-pointer">
+              <svg id="audioIconOff" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
+              </svg>
+              <svg id="audioIconOn" class="w-4 h-4 hidden text-[#320583]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+              <span class="hidden sm:inline" id="audioLabel">Sound Off</span>
+            </button>
+          </div>
+
+          <!-- Heart Rate (BPM) Slider Control -->
+          <div class="flex items-center gap-3 bg-slate-50 px-3.5 py-2 rounded-2xl border border-slate-200/70">
+            <label for="bpmSlider" class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rate</label>
+            <input id="bpmSlider" type="range" min="45" max="150" value="72" class="cardia-slider w-24 sm:w-28" />
+            <span id="bpmValue" class="font-mono text-xs font-bold text-[#320583] w-14 text-right">72 BPM</span>
+          </div>
+        </div>
+
+        <!-- Interactive SVG Canvas: Heart + Pulmonary & Systemic Blood Circulation -->
+        <div class="relative clinical-grid flex-1 flex flex-col items-center justify-center p-3 sm:p-5 select-none">
+          
+          <!-- Floating Instruction Hint -->
+          <div class="w-full flex items-center justify-between text-[11px] text-slate-500 mb-1 px-1">
+            <span class="inline-flex items-center gap-1.5 font-medium">
+              <span class="w-2 h-2 rounded-full bg-[#6c44bb]"></span>
+              Click any chamber, valve, or vessel to inspect
+            </span>
+            <button id="toggleLabelsBtn" type="button" class="text-[#320583] hover:text-[#6c44bb] font-semibold underline-offset-2 hover:underline cursor-pointer">
+              Hide Pins
+            </button>
+          </div>
+
+          <!-- Main Anatomical & Circulatory SVG -->
+          <div class="w-full max-w-[540px] mx-auto">
+            <svg id="heartSimulatorSvg" viewBox="0 0 600 680" class="w-full h-auto overflow-visible drop-shadow-sm" aria-label="Interactive Human Heart and Circulatory System">
+              <defs>
+                <!-- Oxygenated & Deoxygenated Gradients -->
+                <linearGradient id="deoxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#3b82f6"/>
+                  <stop offset="100%" stop-color="#1d4ed8"/>
+                </linearGradient>
+                <linearGradient id="oxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#f43f5e"/>
+                  <stop offset="100%" stop-color="#be123c"/>
+                </linearGradient>
+                <linearGradient id="myocardiumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#fda4af"/>
+                  <stop offset="50%" stop-color="#fb7185"/>
+                  <stop offset="100%" stop-color="#e11d48"/>
+                </linearGradient>
+                <linearGradient id="lungExchangeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#2563eb"/>
+                  <stop offset="50%" stop-color="#426843"/>
+                  <stop offset="100%" stop-color="#e11d48"/>
+                </linearGradient>
+                <linearGradient id="bodyExchangeGrad" x1="100%" y1="0%" x2="0%" y2="0%">
+                  <stop offset="0%" stop-color="#e11d48"/>
+                  <stop offset="50%" stop-color="#6c44bb"/>
+                  <stop offset="100%" stop-color="#2563eb"/>
+                </linearGradient>
+                <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="2.5" result="blur"/>
+                  <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                </filter>
+              </defs>
+
+              <!-- ============================================================ -->
+              <!-- 1. UPPER CIRCUIT: PULMONARY CIRCULATION (LUNGS GAS EXCHANGE) -->
+              <!-- ============================================================ -->
+              <g id="pulmonary-circuit-bg">
+                <!-- Outer Lungs Silhouette Box -->
+                <rect x="135" y="14" width="330" height="96" rx="28" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4"/>
+                
+                <!-- Left & Right Lung Lobes Stylized -->
+                <path d="M 245 32 C 200 32, 165 55, 165 82 C 165 95, 185 98, 225 95 C 245 93, 255 82, 255 62 Z" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+                <path d="M 355 32 C 400 32, 435 55, 435 82 C 435 95, 415 98, 375 95 C 355 93, 345 82, 345 62 Z" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+
+                <!-- Pulmonary Capillary Bridge -->
+                <path d="M 225 65 C 265 45, 335 45, 375 65" fill="none" stroke="url(#lungExchangeGrad)" stroke-width="10" stroke-linecap="round" opacity="0.28"/>
+                
+                <!-- Gas Exchange Badge in #426843 Sage Green -->
+                <rect x="242" y="22" width="116" height="22" rx="11" fill="#426843"/>
+                <text x="300" y="36" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="600" letter-spacing="0.5">LUNGS • O₂ EXCHANGE</text>
+              </g>
+
+              <!-- ============================================================ -->
+              <!-- 2. LOWER CIRCUIT: SYSTEMIC CIRCULATION (BODY TISSUES)        -->
+              <!-- ============================================================ -->
+              <g id="systemic-circuit-bg">
+                <rect x="125" y="568" width="350" height="94" rx="28" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4"/>
+                
+                <!-- Systemic Capillary Bed -->
+                <path d="M 390 612 C 330 635, 270 635, 210 612" fill="none" stroke="url(#bodyExchangeGrad)" stroke-width="10" stroke-linecap="round" opacity="0.28"/>
+                
+                <!-- Body Organs / Tissue Perfusion Badge in #320583 -->
+                <rect x="226" y="630" width="148" height="22" rx="11" fill="#320583"/>
+                <text x="300" y="644" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="600" letter-spacing="0.5">SYSTEMIC BODY TISSUES</text>
+              </g>
+
+              <!-- ============================================================ -->
+              <!-- 3. CONNECTING CIRCULATORY VESSEL TRACKS (BACKGROUND CONDUITS) -->
+              <!-- ============================================================ -->
+              <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <!-- Right Ventricle -> Pulmonary Artery -> Lungs (Blue Deoxygenated) -->
+                <path d="M 278 245 L 278 135 C 278 95, 235 72, 205 68" stroke="#bfdbfe" stroke-width="16"/>
+                <!-- Lungs -> Pulmonary Veins -> Left Atrium (Red Oxygenated) -->
+                <path d="M 395 68 C 435 78, 455 155, 435 245 L 395 268" stroke="#fecdd3" stroke-width="15"/>
+                <!-- Left Ventricle -> Aorta -> Systemic Body (Red Oxygenated) -->
+                <path d="M 326 225 C 326 142, 468 148, 476 285 L 476 535 C 476 592, 435 612, 390 612" stroke="#fecdd3" stroke-width="16"/>
+                <!-- Systemic Body -> Inferior/Superior Vena Cava -> Right Atrium (Blue Deoxygenated) -->
+                <path d="M 210 612 C 155 612, 134 585, 134 525 L 134 335 C 134 300, 165 288, 195 288" stroke="#bfdbfe" stroke-width="16"/>
+              </g>
+
+              <!-- ============================================================ -->
+              <!-- 4. ANIMATED HEART ANATOMY GROUP (SCALES ON SYSTOLE/DIASTOLE) -->
+              <!-- ============================================================ -->
+              <g id="heartPumpGroup" transform="translate(300, 345)">
+                <g transform="translate(-300, -345)">
+
+                  <!-- Outer Pericardium / Myocardium Contour -->
+                  <path d="M 215 215 
+                           C 165 235, 152 325, 185 405 
+                           C 215 478, 282 522, 338 518 
+                           C 398 514, 446 445, 444 355 
+                           C 442 282, 412 225, 362 208 Z" 
+                        fill="#ffe4e6" stroke="#fb7185" stroke-width="3"/>
+
+                  <!-- CLICKABLE PART 1: SUPERIOR & INFERIOR VENA CAVA -->
+                  <g id="part-vena-cava" class="heart-part" data-part="vena-cava">
+                    <!-- Superior Vena Cava -->
+                    <path d="M 182 145 L 218 145 L 218 242 L 182 242 Z" fill="url(#deoxGrad)" stroke="#1e3a8a" stroke-width="2"/>
+                    <!-- Inferior Vena Cava -->
+                    <path d="M 184 420 L 218 420 L 218 525 L 184 525 Z" fill="url(#deoxGrad)" stroke="#1e3a8a" stroke-width="2"/>
+                    <!-- Connection bridge into Right Atrium -->
+                    <path d="M 160 288 L 195 288" stroke="#1d4ed8" stroke-width="16" stroke-linecap="round"/>
+                  </g>
+
+                  <!-- CLICKABLE PART 5: PULMONARY ARTERY & LUNGS -->
+                  <g id="part-pulmonary-circuit" class="heart-part" data-part="pulmonary-circuit">
+                    <path d="M 264 252 L 264 152 C 264 118, 232 95, 195 85 L 202 66 C 248 78, 292 108, 292 152 L 292 252 Z" 
+                          fill="url(#deoxGrad)" stroke="#1e3a8a" stroke-width="2"/>
+                    <!-- Right branch hint -->
+                    <path d="M 290 142 C 315 128, 342 125, 365 128" fill="none" stroke="#2563eb" stroke-width="12" stroke-linecap="round"/>
+                  </g>
+
+                  <!-- CLICKABLE PART 10: AORTA & AORTIC ARCH -->
+                  <g id="part-aorta" class="heart-part" data-part="aorta">
+                    <path d="M 304 248 
+                             C 304 168, 345 135, 398 142 
+                             C 448 148, 472 195, 472 268 
+                             L 444 268 
+                             C 444 212, 426 175, 392 170 
+                             C 356 165, 334 190, 334 248 Z" 
+                          fill="url(#oxGrad)" stroke="#881337" stroke-width="2"/>
+                    <!-- 3 Superior Aortic Arch Branches (Brachiocephalic, Left Common Carotid, Left Subclavian) -->
+                    <path d="M 355 144 L 350 116 M 382 141 L 382 112 M 408 146 L 416 118" stroke="#be123c" stroke-width="9" stroke-linecap="round"/>
+                  </g>
+
+                  <!-- CLICKABLE PART 6: PULMONARY VEINS -->
+                  <g id="part-pulmonary-veins" class="heart-part" data-part="pulmonary-veins">
+                    <path d="M 456 238 L 404 258 L 410 276 L 462 256 Z" fill="url(#oxGrad)" stroke="#881337" stroke-width="2"/>
+                    <path d="M 462 274 L 408 286 L 412 304 L 466 292 Z" fill="url(#oxGrad)" stroke="#881337" stroke-width="2"/>
+                  </g>
+
+                  <!-- ==================================================== -->
+                  <!-- CHAMBERS (ATRIA & VENTRICLES)                        -->
+                  <!-- ==================================================== -->
+                  <g id="atriaGroup">
+                    <!-- CLICKABLE PART 2: RIGHT ATRIUM -->
+                    <path id="part-right-atrium" class="heart-part" data-part="right-atrium"
+                          d="M 182 238 
+                             C 162 262, 162 325, 188 352 
+                             L 252 345 
+                             C 256 302, 248 255, 222 238 Z" 
+                          fill="#3b82f6" stroke="#1e3a8a" stroke-width="2.2"/>
+
+                    <!-- CLICKABLE PART 7: LEFT ATRIUM -->
+                    <path id="part-left-atrium" class="heart-part" data-part="left-atrium"
+                          d="M 358 238 
+                             C 398 242, 424 275, 416 328 
+                             L 352 336 
+                             C 344 295, 344 258, 358 238 Z" 
+                          fill="#f43f5e" stroke="#881337" stroke-width="2.2"/>
+                  </g>
+
+                  <g id="ventriclesGroup">
+                    <!-- CLICKABLE PART 4: RIGHT VENTRICLE -->
+                    <path id="part-right-ventricle" class="heart-part" data-part="right-ventricle"
+                          d="M 192 362 
+                             C 202 432, 255 488, 316 498 
+                             L 304 352 
+                             L 285 256 
+                             L 262 256 
+                             L 254 352 Z" 
+                          fill="#2563eb" stroke="#1e3a8a" stroke-width="2.2"/>
+
+                    <!-- CLICKABLE PART 9: LEFT VENTRICLE (THICK MYOCARDIAL WALL) -->
+                    <path id="part-left-ventricle" class="heart-part" data-part="left-ventricle"
+                          d="M 314 352 
+                             L 328 498 
+                             C 386 488, 424 422, 416 338 
+                             L 352 346 
+                             L 332 252 
+                             L 310 252 Z" 
+                          fill="#e11d48" stroke="#881337" stroke-width="2.5"/>
+                  </g>
+
+                  <!-- Interventricular Septum (Muscular Wall Divider) -->
+                  <path d="M 304 345 L 322 502" stroke="#fda4af" stroke-width="9" stroke-linecap="round"/>
+                  <path d="M 304 345 L 322 502" stroke="#be123c" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3"/>
+
+                  <!-- ==================================================== -->
+                  <!-- VALVES (TRICUSPID & MITRAL / BICUSPID)               -->
+                  <!-- ==================================================== -->
+                  <!-- CLICKABLE PART 3: TRICUSPID VALVE -->
+                  <g id="part-tricuspid-valve" class="heart-part" data-part="tricuspid-valve">
+                    <rect x="186" y="343" width="68" height="16" rx="8" fill="#ffffff" stroke="#320583" stroke-width="2"/>
+                    <path id="tricuspidLeaflets" d="M 194 351 L 218 358 M 246 351 L 222 358" stroke="#320583" stroke-width="3" stroke-linecap="round"/>
+                  </g>
+
+                  <!-- CLICKABLE PART 8: MITRAL (BICUSPID) VALVE -->
+                  <g id="part-mitral-valve" class="heart-part" data-part="mitral-valve">
+                    <rect x="350" y="334" width="66" height="16" rx="8" fill="#ffffff" stroke="#320583" stroke-width="2"/>
+                    <path id="mitralLeaflets" d="M 358 342 L 381 349 M 408 342 L 385 349" stroke="#320583" stroke-width="3" stroke-linecap="round"/>
+                  </g>
+
+                </g>
+              </g>
+
+              <!-- ============================================================ -->
+              <!-- 5. REAL-TIME ANIMATED BLOOD FLOW PARTICLES LAYER             -->
+              <!-- ============================================================ -->
+              <!-- Hidden geometric paths used by JS getPointAtLength() to move blood cells smoothly -->
+              <path id="pulmonaryFlowPath" fill="none" stroke="none"
+                    d="M 210 295 C 218 335, 228 395, 265 425 C 282 415, 278 320, 278 220 L 278 135 C 278 92, 235 68, 195 66 C 245 48, 355 48, 405 66 C 442 78, 456 155, 434 248 L 388 282"/>
+              
+              <path id="systemicFlowPath" fill="none" stroke="none"
+                    d="M 386 292 C 382 335, 376 405, 355 435 C 335 415, 322 315, 320 225 C 320 155, 455 152, 474 268 L 474 535 C 474 592, 435 612, 390 612 C 330 632, 270 632, 210 612 C 155 612, 134 585, 134 525 L 134 335 C 134 298, 168 288, 205 292"/>
+
+              <!-- Container where JS renders animated oxygenated/deoxygenated blood corpuscles -->
+              <g id="bloodParticlesLayer"></g>
+
+              <!-- ============================================================ -->
+              <!-- 6. CLEAN ANATOMICAL PIN LABELS (TOGGLEABLE)                  -->
+              <!-- ============================================================ -->
+              <g id="anatomicalPinsLayer" font-family="Inter, sans-serif" font-size="10.5" font-weight="600">
+                <!-- Aorta Pin -->
+                <g class="heart-part" data-part="aorta" transform="translate(432, 132)">
+                  <rect x="0" y="0" width="64" height="22" rx="11" fill="#320583"/>
+                  <text x="32" y="14.5" text-anchor="middle" fill="#ffffff">Aorta</text>
+                </g>
+                <!-- Pulmonary Artery Pin -->
+                <g class="heart-part" data-part="pulmonary-circuit" transform="translate(152, 126)">
+                  <rect x="0" y="0" width="106" height="22" rx="11" fill="#1d4ed8"/>
+                  <text x="53" y="14.5" text-anchor="middle" fill="#ffffff">Pulmonary Art.</text>
+                </g>
+                <!-- Vena Cava Pin -->
+                <g class="heart-part" data-part="vena-cava" transform="translate(88, 232)">
+                  <rect x="0" y="0" width="84" height="22" rx="11" fill="#1e3a8a"/>
+                  <text x="42" y="14.5" text-anchor="middle" fill="#ffffff">Vena Cava</text>
+                </g>
+                <!-- Right Atrium Pin -->
+                <g class="heart-part" data-part="right-atrium" transform="translate(192, 286)">
+                  <circle cx="14" cy="11" r="11" fill="#ffffff" stroke="#1e3a8a" stroke-width="2"/>
+                  <text x="14" y="14.5" text-anchor="middle" fill="#1e3a8a" font-size="10" font-weight="700">RA</text>
+                </g>
+                <!-- Left Atrium Pin -->
+                <g class="heart-part" data-part="left-atrium" transform="translate(370, 284)">
+                  <circle cx="14" cy="11" r="11" fill="#ffffff" stroke="#881337" stroke-width="2"/>
+                  <text x="14" y="14.5" text-anchor="middle" fill="#881337" font-size="10" font-weight="700">LA</text>
+                </g>
+                <!-- Tricuspid Valve Pin -->
+                <g class="heart-part" data-part="tricuspid-valve" transform="translate(96, 340)">
+                  <rect x="0" y="0" width="84" height="22" rx="11" fill="#6c44bb"/>
+                  <text x="42" y="14.5" text-anchor="middle" fill="#ffffff">Tricuspid</text>
+                </g>
+                <!-- Mitral Valve Pin -->
+                <g class="heart-part" data-part="mitral-valve" transform="translate(424, 331)">
+                  <rect x="0" y="0" width="68" height="22" rx="11" fill="#6c44bb"/>
+                  <text x="34" y="14.5" text-anchor="middle" fill="#ffffff">Mitral</text>
+                </g>
+                <!-- Right Ventricle Pin -->
+                <g class="heart-part" data-part="right-ventricle" transform="translate(238, 405)">
+                  <circle cx="15" cy="11" r="12" fill="#ffffff" stroke="#1e3a8a" stroke-width="2"/>
+                  <text x="15" y="14.5" text-anchor="middle" fill="#1e3a8a" font-size="10" font-weight="700">RV</text>
+                </g>
+                <!-- Left Ventricle Pin -->
+                <g class="heart-part" data-part="left-ventricle" transform="translate(356, 405)">
+                  <circle cx="15" cy="11" r="12" fill="#ffffff" stroke="#881337" stroke-width="2"/>
+                  <text x="15" y="14.5" text-anchor="middle" fill="#881337" font-size="10" font-weight="700">LV</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Bottom Live ECG Waveform Monitor Strip -->
+        <div class="bg-slate-950 text-white px-4 sm:px-6 py-3 flex items-center justify-between gap-4 border-t border-slate-800">
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#426843] animate-soft-pulse"></span>
+            <div>
+              <div class="text-[10px] font-mono uppercase tracking-widest text-slate-400">Live Lead II ECG</div>
+              <div id="cardiacPhaseText" class="text-xs font-semibold text-emerald-300">Ready • Click Start Pumping</div>
+            </div>
+          </div>
+          <div class="flex-1 max-w-md h-10 bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden relative">
+            <canvas id="ecgCanvas" class="w-full h-full block"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN (5 cols on lg): Anatomical Inspector (Images + Explanations) -->
+      <aside class="lg:col-span-5 flex flex-col gap-4">
+        
+        <!-- Quick Structure Selector Pills (Touch-Friendly Horizontal Scroll) -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-2.5 shadow-sm">
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-2 mb-2">Select Anatomical Structure</div>
+          <div id="partSelectorPills" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- Detailed Anatomical Card -->
+        <div id="inspectorCard" class="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden transition-all">
+          
+          <!-- Card Top Banner -->
+          <div class="p-5 sm:p-6 border-b border-slate-100">
+            <div class="flex items-center justify-between gap-2 mb-2.5">
+              <span id="partCategoryBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#320583]/10 text-[#320583]">
+                Oxygenated Chamber
+              </span>
+              <span id="partCirculationBadge" class="text-xs font-mono font-medium text-slate-500">
+                Systemic Loop
+              </span>
+            </div>
+
+            <h2 id="partTitle" class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Left Ventricle
+            </h2>
+            <p id="partSubtitle" class="text-xs font-mono text-[#6c44bb] mt-0.5">
+              Ventriculus sinister • Primary Systemic Pump
+            </p>
+          </div>
+
+          <!-- High-Resolution Custom Close-Up Anatomical Illustration ("Image") -->
+          <div class="px-5 sm:px-6 pt-5">
+            <div class="rounded-2xl bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 p-4 relative overflow-hidden">
+              <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-2">
+                <span>ANATOMICAL CROSS-SECTION VIEW</span>
+                <span class="px-2 py-0.5 rounded bg-white border border-slate-200 text-[#320583] font-semibold">FIG. <span id="partFigureNum">09</span></span>
+              </div>
+              
+              <!-- Dynamic SVG Anatomical Close-Up Image Container -->
+              <div id="partIllustrationBox" class="w-full h-44 sm:h-48 flex items-center justify-center">
+                <!-- Injected dynamically for each selected part -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Physiological Telemetry Metrics (3 Mini Cards) -->
+          <div class="px-5 sm:px-6 pt-4">
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">O₂ Saturation</div>
+                <div id="metricO2" class="text-sm sm:text-base font-mono font-bold text-[#426843] mt-0.5">98%</div>
+              </div>
+              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pressure</div>
+                <div id="metricPressure" class="text-sm sm:text-base font-mono font-bold text-[#320583] mt-0.5">120/8 mmHg</div>
+              </div>
+              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Blood State</div>
+                <div id="metricBloodState" class="text-sm sm:text-base font-bold text-rose-600 mt-0.5">O₂-Rich</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detailed Anatomical & Physiological Explanation -->
+          <div class="p-5 sm:p-6 space-y-4">
+            <div>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Physiological Function</h3>
+              <p id="partDescription" class="text-sm leading-relaxed text-slate-600">
+                <!-- Populated by JS -->
+              </p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-[#320583]/[0.03] border border-[#320583]/15">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-[#320583] mb-2 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-[#6c44bb]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+                </svg>
+                Key Structural Highlights
+              </h4>
+              <ul id="partHighlights" class="space-y-1.5 text-xs text-slate-700">
+                <!-- Populated by JS -->
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- Minimal Portfolio Footer -->
+  <footer class="border-t border-slate-200/80 bg-white mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+      <div>CARDIA Interactive Human Heart Simulator • Built for Interactive Anatomy Exploration</div>
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#320583]"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#6c44bb]"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#426843]"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ====================================================================== -->
+  <!-- INTERACTIVE SIMULATION ENGINE & ANATOMICAL KNOWLEDGE BASE              -->
+  <!-- ====================================================================== -->
+  <script>
+    /**
+     * Comprehensive Anatomical & Physiological Dataset
+     * Each entry contains clinical metrics, clear explanations, structural highlights,
+     * and a dedicated custom close-up vector illustration ("image").
+     */
+    const HEART_DATA = {
+      'left-ventricle': {
+        fig: '01',
+        shortName: 'Left Ventricle',
+        title: 'Left Ventricle',
+        subtitle: 'Ventriculus sinister • Primary Systemic Pump',
+        category: 'Oxygenated Chamber',
+        categoryStyle: 'bg-rose-50 text-rose-700 border border-rose-200',
+        loop: 'Systemic Circuit',
+        o2: '98%',
+        o2Color: 'text-[#426843]',
+        pressure: '120/8 mmHg',
+        bloodState: 'O₂-Rich',
+        bloodColor: 'text-rose-600',
+        description: 'The left ventricle is the thickest and most muscular chamber of the human heart. Receiving freshly oxygenated blood from the left atrium through the mitral valve, it contracts forcefully during ventricular systole to propel blood through the aortic valve into the aorta, supplying oxygen and nutrients to the entire body.',
+        highlights: [
+          'Myocardial wall is 3× thicker (10–15 mm) than the right ventricle to overcome high systemic vascular resistance.',
+          'Forms the anatomical apex of the heart, oriented downward and to the left.',
+          'Trabeculae carneae and papillary muscles anchor the mitral valve during high-pressure contraction.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Thick Myocardial Wall Cross-Section -->
+            <path d="M 95 25 C 75 75, 95 130, 155 140 C 215 130, 235 75, 215 25 L 190 25 C 202 70, 188 110, 155 116 C 122 110, 108 70, 120 25 Z" fill="#fda4af" stroke="#e11d48" stroke-width="2"/>
+            <!-- Inner Chamber Cavity -->
+            <path d="M 120 25 C 108 70, 122 110, 155 116 C 188 110, 202 70, 190 25 Z" fill="#ffe4e6"/>
+            <!-- Flow Arrow Up to Aorta -->
+            <path d="M 155 102 L 155 36 M 145 48 L 155 34 L 165 48" fill="none" stroke="#be123c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Dimension Callout -->
+            <line x1="82" y1="80" x2="114" y2="80" stroke="#320583" stroke-width="2"/>
+            <text x="20" y="76" fill="#320583" font-size="10" font-weight="700" font-family="Inter">Thick Wall</text>
+            <text x="20" y="89" fill="#64748b" font-size="9" font-family="JetBrains Mono">(12–15 mm)</text>
+            <text x="225" y="76" fill="#be123c" font-size="10" font-weight="700" font-family="Inter">High Pressure</text>
+            <text x="225" y="89" fill="#64748b" font-size="9" font-family="JetBrains Mono">120 mmHg</text>
+          </svg>`
+      },
+      'right-atrium': {
+        fig: '02',
+        shortName: 'Right Atrium',
+        title: 'Right Atrium',
+        subtitle: 'Atrium dextrum • Venous Receiving Chamber',
+        category: 'Deoxygenated Chamber',
+        categoryStyle: 'bg-blue-50 text-blue-700 border border-blue-200',
+        loop: 'Systemic Return',
+        o2: '75%',
+        o2Color: 'text-blue-700',
+        pressure: '4–6 mmHg',
+        bloodState: 'O₂-Poor',
+        bloodColor: 'text-blue-600',
+        description: 'The right atrium receives oxygen-depleted blood returning from the upper body via the superior vena cava, the lower body via the inferior vena cava, and the heart muscle itself via the coronary sinus. It also houses the sinoatrial (SA) node—the heart’s natural pacemaker.',
+        highlights: [
+          'Contains the Sinoatrial (SA) Node in its upper wall, initiating every normal electrical heartbeat.',
+          'Contracts gently during atrial systole to top off the right ventricle through the tricuspid valve.',
+          'Features smooth posterior walls (sinus venarum) and ridged anterior pectinate muscles.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Chamber -->
+            <circle cx="160" cy="82" r="46" fill="#dbeafe" stroke="#2563eb" stroke-width="2.5"/>
+            <!-- SVC & IVC Inflows -->
+            <path d="M 160 16 L 160 44 M 152 36 L 160 45 L 168 36" fill="none" stroke="#1d4ed8" stroke-width="3" stroke-linecap="round"/>
+            <path d="M 160 146 L 160 118 M 152 126 L 160 117 L 168 126" fill="none" stroke="#1d4ed8" stroke-width="3" stroke-linecap="round"/>
+            <!-- SA Node Pacemaker Glow -->
+            <circle cx="132" cy="54" r="9" fill="#6c44bb"/>
+            <circle cx="132" cy="54" r="15" fill="none" stroke="#6c44bb" stroke-width="1.5" stroke-dasharray="3 2"/>
+            <text x="24" y="52" fill="#320583" font-size="10" font-weight="700" font-family="Inter">SA Pacemaker</text>
+            <text x="24" y="64" fill="#64748b" font-size="9" font-family="JetBrains Mono">60–100 bpm</text>
+            <text x="218" y="84" fill="#1d4ed8" font-size="10" font-weight="700" font-family="Inter">Venous Inflow</text>
+          </svg>`
+      },
+      'right-ventricle': {
+        fig: '03',
+        shortName: 'Right Ventricle',
+        title: 'Right Ventricle',
+        subtitle: 'Ventriculus dexter • Pulmonary Pump',
+        category: 'Deoxygenated Chamber',
+        categoryStyle: 'bg-blue-50 text-blue-700 border border-blue-200',
+        loop: 'Pulmonary Circuit',
+        o2: '75%',
+        o2Color: 'text-blue-700',
+        pressure: '25/4 mmHg',
+        bloodState: 'O₂-Poor',
+        bloodColor: 'text-blue-600',
+        description: 'Shaped like a crescent wrapping around the interventricular septum, the right ventricle receives deoxygenated blood from the right atrium and pumps it upward through the pulmonary valve into the pulmonary trunk toward the lungs for oxygenation.',
+        highlights: [
+          'Operates at roughly one-fifth the pressure of the left ventricle because lung vasculature is low-resistance.',
+          'Walls are thinner (3–5 mm) and crescent-shaped in cross-section.',
+          'Separates inflow (tricuspid) and outflow (pulmonary) tracts via the supraventricular crest.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Crescent RV Shape -->
+            <path d="M 110 42 C 95 95, 130 130, 185 130 C 165 100, 165 65, 180 35 Z" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="2.5"/>
+            <!-- Outflow Arrow -->
+            <path d="M 140 105 C 138 75, 148 52, 166 30 M 156 32 L 167 28 L 169 40" fill="none" stroke="#1e3a8a" stroke-width="3" stroke-linecap="round"/>
+            <text x="200" y="68" fill="#1d4ed8" font-size="10" font-weight="700" font-family="Inter">Low-Resistance</text>
+            <text x="200" y="81" fill="#1d4ed8" font-size="10" font-weight="700" font-family="Inter">Pulmonary Drive</text>
+            <text x="200" y="96" fill="#64748b" font-size="9" font-family="JetBrains Mono">25 mmHg Systolic</text>
+          </svg>`
+      },
+      'left-atrium': {
+        fig: '04',
+        shortName: 'Left Atrium',
+        title: 'Left Atrium',
+        subtitle: 'Atrium sinistrum • Oxygenated Reservoir',
+        category: 'Oxygenated Chamber',
+        categoryStyle: 'bg-rose-50 text-rose-700 border border-rose-200',
+        loop: 'Pulmonary Return',
+        o2: '98%',
+        o2Color: 'text-[#426843]',
+        pressure: '8–10 mmHg',
+        bloodState: 'O₂-Rich',
+        bloodColor: 'text-rose-600',
+        description: 'Positioned posteriorly at the base of the heart, the left atrium collects freshly oxygenated blood arriving from the lungs via four pulmonary veins. During ventricular diastole, it delivers this oxygen-rich blood across the mitral valve into the left ventricle.',
+        highlights: [
+          'Receives four pulmonary veins (left & right superior and inferior) directly into its smooth posterior wall.',
+          'Acts both as a passive reservoir during ventricular systole and an active booster pump ("atrial kick").',
+          'Slightly thicker wall than the right atrium to support higher left-sided filling pressures.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <circle cx="160" cy="80" r="44" fill="#ffe4e6" stroke="#e11d48" stroke-width="2.5"/>
+            <!-- 4 Pulmonary Veins entering -->
+            <line x1="92" y1="58" x2="122" y2="68" stroke="#e11d48" stroke-width="6" stroke-linecap="round"/>
+            <line x1="92" y1="102" x2="122" y2="92" stroke="#e11d48" stroke-width="6" stroke-linecap="round"/>
+            <line x1="228" y1="58" x2="198" y2="68" stroke="#e11d48" stroke-width="6" stroke-linecap="round"/>
+            <line x1="228" y1="102" x2="198" y2="92" stroke="#e11d48" stroke-width="6" stroke-linecap="round"/>
+            <text x="160" y="84" text-anchor="middle" fill="#881337" font-size="10" font-weight="700" font-family="Inter">4x O₂ Inflows</text>
+          </svg>`
+      },
+      'aorta': {
+        fig: '05',
+        shortName: 'Aorta',
+        title: 'Aorta & Aortic Arch',
+        subtitle: 'Aorta ascendens & Arcus aortae • Main Artery',
+        category: 'Great Vessel',
+        categoryStyle: 'bg-[#320583]/10 text-[#320583] border border-[#320583]/20',
+        loop: 'Systemic Outflow',
+        o2: '98%',
+        o2Color: 'text-[#426843]',
+        pressure: '120/80 mmHg',
+        bloodState: 'O₂-Rich',
+        bloodColor: 'text-rose-600',
+        description: 'The aorta is the largest artery in the human body. Originating at the aortic valve of the left ventricle, it ascends, arches gracefully over the pulmonary trunk, and descends through the thorax and abdomen—distributing oxygenated blood to every organ system.',
+        highlights: [
+          'Elastic walls expand during systole and recoil during diastole (Windkessel effect) to maintain continuous blood flow.',
+          'Three major branches arise from the arch: Brachiocephalic trunk, Left Common Carotid, and Left Subclavian arteries.',
+          'Coronary arteries branch off the ascending aorta just above the aortic valve to feed the heart muscle itself.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Aortic Arch Curve -->
+            <path d="M 115 135 L 115 80 C 115 45, 205 45, 205 80 L 205 135" fill="none" stroke="#e11d48" stroke-width="22" stroke-linecap="round"/>
+            <path d="M 115 135 L 115 80 C 115 45, 205 45, 205 80 L 205 135" fill="none" stroke="#fda4af" stroke-width="6" stroke-dasharray="6 6"/>
+            <!-- 3 Arch Branches -->
+            <line x1="138" y1="52" x2="134" y2="24" stroke="#be123c" stroke-width="7" stroke-linecap="round"/>
+            <line x1="160" y1="48" x2="160" y2="20" stroke="#be123c" stroke-width="7" stroke-linecap="round"/>
+            <line x1="182" y1="52" x2="186" y2="24" stroke="#be123c" stroke-width="7" stroke-linecap="round"/>
+            <text x="228" y="75" fill="#320583" font-size="10" font-weight="700" font-family="Inter">Elastic Recoil</text>
+            <text x="228" y="88" fill="#64748b" font-size="9" font-family="JetBrains Mono">120/80 mmHg</text>
+          </svg>`
+      },
+      'pulmonary-circuit': {
+        fig: '06',
+        shortName: 'Pulmonary Artery',
+        title: 'Pulmonary Artery & Lungs',
+        subtitle: 'Truncus pulmonalis • Alveolar Gas Exchange',
+        category: 'Pulmonary Circuit',
+        categoryStyle: 'bg-[#426843]/15 text-[#426843] border border-[#426843]/30',
+        loop: 'Pulmonary Loop',
+        o2: '75% → 98%',
+        o2Color: 'text-[#426843]',
+        pressure: '25/10 mmHg',
+        bloodState: 'Re-Oxygenating',
+        bloodColor: 'text-[#426843]',
+        description: 'Uniquely among arteries, the pulmonary trunk and its left and right pulmonary arteries carry oxygen-poor blood away from the heart toward the lungs. Inside microscopic alveolar capillaries, carbon dioxide is exhaled and fresh oxygen binds to hemoglobin.',
+        highlights: [
+          'Bifurcates beneath the aortic arch into left and right pulmonary arteries entering each lung.',
+          'Alveolar-capillary membrane is only 0.5 micrometers thick, enabling rapid passive diffusion of O₂ and CO₂.',
+          'Transforms venous blood saturation from ~75% up to 98–100% arterial saturation.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Capillary Gas Exchange Tube -->
+            <defs>
+              <linearGradient id="capIllus" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2563eb"/>
+                <stop offset="50%" stop-color="#426843"/>
+                <stop offset="100%" stop-color="#e11d48"/>
+              </linearGradient>
+            </defs>
+            <rect x="45" y="74" width="230" height="24" rx="12" fill="url(#capIllus)"/>
+            <!-- Alveolus Sac -->
+            <circle cx="160" cy="44" r="22" fill="#426843" fill-opacity="0.15" stroke="#426843" stroke-width="2"/>
+            <text x="160" y="48" text-anchor="middle" fill="#426843" font-size="10" font-weight="700" font-family="Inter">O₂ IN</text>
+            <text x="65" y="116" fill="#1d4ed8" font-size="9.5" font-weight="700" font-family="JetBrains Mono">75% O₂</text>
+            <text x="215" y="116" fill="#e11d48" font-size="9.5" font-weight="700" font-family="JetBrains Mono">98% O₂</text>
+          </svg>`
+      },
+      'pulmonary-veins': {
+        fig: '07',
+        shortName: 'Pulmonary Veins',
+        title: 'Pulmonary Veins',
+        subtitle: 'Venae pulmonales • Oxygenated Return',
+        category: 'Great Vessel',
+        categoryStyle: 'bg-rose-50 text-rose-700 border border-rose-200',
+        loop: 'Pulmonary Return',
+        o2: '98%',
+        o2Color: 'text-[#426843]',
+        pressure: '8–12 mmHg',
+        bloodState: 'O₂-Rich',
+        bloodColor: 'text-rose-600',
+        description: 'The pulmonary veins are the only veins in the adult human body that transport oxygenated blood. Four major trunks—two from the left lung and two from the right lung—deliver bright red, oxygen-saturated blood directly into the left atrium.',
+        highlights: [
+          'Defined as veins because they carry blood toward the heart, despite carrying oxygenated arterial-grade blood.',
+          'Lack venous valves, allowing smooth, uninterrupted low-pressure flow into the left atrium.',
+          'Crucial component of left-heart preload regulation.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <path d="M 45 55 L 175 72 M 45 105 L 175 88" stroke="#e11d48" stroke-width="12" stroke-linecap="round"/>
+            <circle cx="215" cy="80" r="38" fill="#ffe4e6" stroke="#be123c" stroke-width="2.5"/>
+            <text x="215" y="84" text-anchor="middle" fill="#881337" font-size="10" font-weight="700" font-family="Inter">Left Atrium</text>
+            <text x="48" y="38" fill="#be123c" font-size="10" font-weight="700" font-family="Inter">Oxygenated Veins</text>
+          </svg>`
+      },
+      'vena-cava': {
+        fig: '08',
+        shortName: 'Vena Cava',
+        title: 'Superior & Inferior Vena Cava',
+        subtitle: 'Vena cava superior & inferior • Systemic Return',
+        category: 'Great Vessel',
+        categoryStyle: 'bg-blue-50 text-blue-700 border border-blue-200',
+        loop: 'Systemic Return',
+        o2: '75%',
+        o2Color: 'text-blue-700',
+        pressure: '2–6 mmHg',
+        bloodState: 'O₂-Poor',
+        bloodColor: 'text-blue-600',
+        description: 'The superior and inferior venae cavae are the two largest veins in the body. The superior vena cava drains deoxygenated blood from the head, neck, and arms, while the inferior vena cava returns blood from the abdomen, pelvis, and lower limbs into the right atrium.',
+        highlights: [
+          'Large lumen diameter minimizes resistance so low-pressure venous blood returns effortlessly to the heart.',
+          'Venous return is assisted by skeletal muscle contractions and negative thoracic pressure during inhalation.',
+          'Both vessels empty directly into the posterior aspect of the right atrium.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <rect x="144" y="20" width="32" height="120" rx="8" fill="#2563eb"/>
+            <path d="M 160 32 L 160 62 M 152 54 L 160 63 L 168 54" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M 160 128 L 160 98 M 152 106 L 160 97 L 168 106" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+            <text x="44" y="46" fill="#1e3a8a" font-size="10" font-weight="700" font-family="Inter">Superior VC</text>
+            <text x="44" y="58" fill="#64748b" font-size="9" font-family="Inter">(Upper Body)</text>
+            <text x="44" y="114" fill="#1e3a8a" font-size="10" font-weight="700" font-family="Inter">Inferior VC</text>
+            <text x="44" y="126" fill="#64748b" font-size="9" font-family="Inter">(Lower Body)</text>
+          </svg>`
+      },
+      'tricuspid-valve': {
+        fig: '09',
+        shortName: 'Tricuspid Valve',
+        title: 'Tricuspid Valve',
+        subtitle: 'Valva atrioventricularis dextra • One-Way Gate',
+        category: 'Cardiac Valve',
+        categoryStyle: 'bg-[#6c44bb]/15 text-[#6c44bb] border border-[#6c44bb]/30',
+        loop: 'Right AV Junction',
+        o2: '75%',
+        o2Color: 'text-blue-700',
+        pressure: 'Right AV Seal',
+        bloodState: 'O₂-Poor',
+        bloodColor: 'text-blue-600',
+        description: 'Situated between the right atrium and right ventricle, the tricuspid valve consists of three thin, flexible cusps (anterior, posterior, and septal). It opens during diastole to allow ventricular filling and snaps shut during systole—creating part of the first heart sound ("Lub").',
+        highlights: [
+          'Tethered by fibrous chordae tendineae ("heart strings") to papillary muscles to prevent prolapse.',
+          'Ensures strictly unidirectional flow from the right atrium into the right ventricle.',
+          'Closure coincides with the mitral valve at the onset of ventricular systole (S1 "Lub" sound).'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Valve Ring & 3 Cusps -->
+            <circle cx="160" cy="80" r="46" fill="#f8fafc" stroke="#320583" stroke-width="3"/>
+            <path d="M 160 34 L 160 80 L 120 103 M 160 80 L 200 103" fill="none" stroke="#6c44bb" stroke-width="3" stroke-linecap="round"/>
+            <text x="160" y="64" text-anchor="middle" fill="#320583" font-size="9" font-weight="700">Anterior</text>
+            <text x="134" y="108" text-anchor="middle" fill="#320583" font-size="9" font-weight="700">Septal</text>
+            <text x="186" y="108" text-anchor="middle" fill="#320583" font-size="9" font-weight="700">Posterior</text>
+          </svg>`
+      },
+      'mitral-valve': {
+        fig: '10',
+        shortName: 'Mitral Valve',
+        title: 'Mitral (Bicuspid) Valve',
+        subtitle: 'Valva mitralis • High-Pressure Left AV Valve',
+        category: 'Cardiac Valve',
+        categoryStyle: 'bg-[#6c44bb]/15 text-[#6c44bb] border border-[#6c44bb]/30',
+        loop: 'Left AV Junction',
+        o2: '98%',
+        o2Color: 'text-[#426843]',
+        pressure: 'Seals 120 mmHg',
+        bloodState: 'O₂-Rich',
+        bloodColor: 'text-rose-600',
+        description: 'Named for its resemblance to a bishop’s miter, the mitral (bicuspid) valve guards the opening between the left atrium and left ventricle. Built with two robust leaflets, it withstands the highest closing pressures in the heart during left ventricular contraction.',
+        highlights: [
+          'Composed of two strong leaflets (anterior and posterior) anchored by thick chordae tendineae.',
+          'Prevents oxygenated blood from regurgitating back into the left atrium and lungs during systole.',
+          'Snaps shut simultaneously with the tricuspid valve to produce the crisp S1 ("Lub") acoustic signature.'
+        ],
+        illustration: `
+          <svg viewBox="0 0 320 160" class="w-full h-full">
+            <rect x="10" y="10" width="300" height="140" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+            <!-- Bicuspid Mitral Ring -->
+            <circle cx="160" cy="80" r="46" fill="#fff1f2" stroke="#320583" stroke-width="3"/>
+            <path d="M 118 74 Q 160 92 202 74" fill="none" stroke="#6c44bb" stroke-width="3.5" stroke-linecap="round"/>
+            <text x="160" y="60" text-anchor="middle" fill="#320583" font-size="9.5" font-weight="700">Anterior Leaflet</text>
+            <text x="160" y="104" text-anchor="middle" fill="#320583" font-size="9.5" font-weight="700">Posterior Leaflet</text>
+          </svg>`
+      }
+    };
+
+    // =========================================================================
+    // STATE & DOM REFERENCES
+    // =========================================================================
+    let isPlaying = false;
+    let bpm = 72;
+    let selectedPartId = 'left-ventricle';
+    let showPins = true;
+    let audioEnabled = false;
+
+    // Cardiac cycle state (0.0 to 1.0 represents 1 complete heartbeat)
+    let cyclePhase = 0;
+    let lastTimestamp = null;
+    let lubPlayedThisBeat = false;
+    let dubPlayedThisBeat = false;
+
+    // ECG History Buffer
+    const ecgHistory = new Array(160).fill(0);
+
+    // Tone.js MembraneSynth for realistic low-frequency "Lub-Dub" sounds
+    let heartSynth = null;
+
+    // DOM Elements
+    const playToggleBtn = document.getElementById('playToggleBtn');
+    const playBtnLabel = document.getElementById('playBtnLabel');
+    const playIcon = document.getElementById('playIcon');
+    const audioToggleBtn = document.getElementById('audioToggleBtn');
+    const audioIconOff = document.getElementById('audioIconOff');
+    const audioIconOn = document.getElementById('audioIconOn');
+    const audioLabel = document.getElementById('audioLabel');
+    const bpmSlider = document.getElementById('bpmSlider');
+    const bpmValue = document.getElementById('bpmValue');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const cardiacPhaseText = document.getElementById('cardiacPhaseText');
+    const toggleLabelsBtn = document.getElementById('toggleLabelsBtn');
+    const anatomicalPinsLayer = document.getElementById('anatomicalPinsLayer');
+    const heartPumpGroup = document.getElementById('heartPumpGroup');
+    const atriaGroup = document.getElementById('atriaGroup');
+    const ventriclesGroup = document.getElementById('ventriclesGroup');
+    const tricuspidLeaflets = document.getElementById('tricuspidLeaflets');
+    const mitralLeaflets = document.getElementById('mitralLeaflets');
+
+    // Blood flow paths & particle layer
+    const pulmonaryFlowPath = document.getElementById('pulmonaryFlowPath');
+    const systemicFlowPath = document.getElementById('systemicFlowPath');
+    const bloodParticlesLayer = document.getElementById('bloodParticlesLayer');
+
+    // ECG Canvas
+    const ecgCanvas = document.getElementById('ecgCanvas');
+    const ecgCtx = ecgCanvas.getContext('2d');
+
+    // =========================================================================
+    // INITIALIZE BLOOD PARTICLES ALONG PULMONARY & SYSTEMIC CIRCUITS
+    // =========================================================================
+    const pulmonaryLength = pulmonaryFlowPath.getTotalLength();
+    const systemicLength = systemicFlowPath.getTotalLength();
+
+    const particles = [];
+
+    function initBloodParticles() {
+      bloodParticlesLayer.innerHTML = '';
+      particles.length = 0;
+
+      // 18 particles in the Pulmonary Loop (RV -> Lungs -> LA)
+      const pulmCount = 18;
+      for (let i = 0; i < pulmCount; i++) {
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('r', '4.3');
+        circle.setAttribute('stroke', '#ffffff');
+        circle.setAttribute('stroke-width', '1.2');
+        bloodParticlesLayer.appendChild(circle);
+
+        particles.push({
+          el: circle,
+          loop: 'pulmonary',
+          progress: i / pulmCount,
+        });
+      }
+
+      // 26 particles in the Systemic Loop (LV -> Aorta -> Body -> Vena Cava -> RA)
+      const sysCount = 26;
+      for (let i = 0; i < sysCount; i++) {
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('r', '4.5');
+        circle.setAttribute('stroke', '#ffffff');
+        circle.setAttribute('stroke-width', '1.2');
+        bloodParticlesLayer.appendChild(circle);
+
+        particles.push({
+          el: circle,
+          loop: 'systemic',
+          progress: i / sysCount,
+        });
+      }
+
+      updateParticlePositions(0);
+    }
+
+    /**
+     * Updates coordinates & oxygen-color transitions for all blood cells
+     */
+    function updateParticlePositions(deltaProgress) {
+      particles.forEach((p) => {
+        p.progress = (p.progress + deltaProgress) % 1;
+
+        if (p.loop === 'pulmonary') {
+          const pt = pulmonaryFlowPath.getPointAtLength(p.progress * pulmonaryLength);
+          p.el.setAttribute('cx', pt.x.toFixed(1));
+          p.el.setAttribute('cy', pt.y.toFixed(1));
+
+          // Color transition in the Lungs (progress ~0.42 to ~0.62): Blue -> Sage -> Crimson
+          if (p.progress < 0.42) {
+            p.el.setAttribute('fill', '#2563eb'); // Deoxygenated Blue
+          } else if (p.progress < 0.56) {
+            p.el.setAttribute('fill', '#426843'); // Oxygenating in Alveoli (Sage Green accent)
+          } else {
+            p.el.setAttribute('fill', '#e11d48'); // Oxygenated Crimson
+          }
+        } else {
+          const pt = systemicFlowPath.getPointAtLength(p.progress * systemicLength);
+          p.el.setAttribute('cx', pt.x.toFixed(1));
+          p.el.setAttribute('cy', pt.y.toFixed(1));
+
+          // Color transition in Systemic Body Tissues (progress ~0.48 to ~0.64): Crimson -> Purple -> Blue
+          if (p.progress < 0.48) {
+            p.el.setAttribute('fill', '#e11d48'); // Oxygenated Crimson
+          } else if (p.progress < 0.60) {
+            p.el.setAttribute('fill', '#6c44bb'); // Tissue Perfusion (Vibrant Purple accent)
+          } else {
+            p.el.setAttribute('fill', '#2563eb'); // Deoxygenated Blue returning to Vena Cava
+          }
+        }
+      });
+    }
+
+    // =========================================================================
+    // AUDIO SYNTHESIS (TONE.JS LUB-DUB HEART SOUNDS)
+    // =========================================================================
+    function triggerHeartSound(type) {
+      if (!audioEnabled || !heartSynth) return;
+      try {
+        if (type === 'lub') {
+          // S1: Slightly longer, lower pitch (Mitral & Tricuspid closure)
+          heartSynth.triggerAttackRelease('C1', '16n');
+        } else if (type === 'dub') {
+          // S2: Crisper, slightly higher pitch (Aortic & Pulmonary closure)
+          heartSynth.triggerAttackRelease('F1', '32n');
+        }
+      } catch (err) {
+        // Ignore audio scheduling overlaps
+      }
+    }
+
+    audioToggleBtn.addEventListener('click', async () => {
+      audioEnabled = !audioEnabled;
+      if (audioEnabled) {
+        await Tone.start();
+        if (!heartSynth) {
+          heartSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.04,
+            octaves: 2.5,
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.005, decay: 0.14, sustain: 0, release: 0.08 }
+          }).toDestination();
+          heartSynth.volume.value = -6;
+        }
+        audioIconOff.classList.add('hidden');
+        audioIconOn.classList.remove('hidden');
+        audioLabel.textContent = 'Sound On';
+        audioToggleBtn.classList.add('border-[#320583]', 'text-[#320583]', 'bg-[#320583]/5');
+      } else {
+        audioIconOn.classList.add('hidden');
+        audioIconOff.classList.remove('hidden');
+        audioLabel.textContent = 'Sound Off';
+        audioToggleBtn.classList.remove('border-[#320583]', 'text-[#320583]', 'bg-[#320583]/5');
+      }
+    });
+
+    // =========================================================================
+    // ECG WAVEFORM GENERATOR & CANVAS RENDERER
+    // =========================================================================
+    function getEcgSample(phase) {
+      // Realistic P-QRS-T waveform mapped to normalized cardiac phase [0..1]
+      if (phase >= 0.04 && phase < 0.12) {
+        // P-wave (Atrial depolarization)
+        const x = (phase - 0.04) / 0.08;
+        return Math.sin(x * Math.PI) * 0.22;
+      } else if (phase >= 0.15 && phase < 0.17) {
+        // Q-wave dip
+        const x = (phase - 0.15) / 0.02;
+        return -Math.sin(x * Math.PI) * 0.18;
+      } else if (phase >= 0.17 && phase < 0.22) {
+        // R-wave sharp peak (Ventricular depolarization)
+        const x = (phase - 0.17) / 0.05;
+        return Math.sin(x * Math.PI) * 0.95;
+      } else if (phase >= 0.22 && phase < 0.25) {
+        // S-wave dip
+        const x = (phase - 0.22) / 0.03;
+        return -Math.sin(x * Math.PI) * 0.28;
+      } else if (phase >= 0.34 && phase < 0.48) {
+        // T-wave (Ventricular repolarization)
+        const x = (phase - 0.34) / 0.14;
+        return Math.sin(x * Math.PI) * 0.32;
+      }
+      return 0;
+    }
+
+    function renderEcgCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = ecgCanvas.getBoundingClientRect();
+      if (ecgCanvas.width !== rect.width * dpr || ecgCanvas.height !== rect.height * dpr) {
+        ecgCanvas.width = rect.width * dpr;
+        ecgCanvas.height = rect.height * dpr;
+      }
+
+      const w = ecgCanvas.width;
+      const h = ecgCanvas.height;
+      ecgCtx.clearRect(0, 0, w, h);
+
+      // Subtle baseline
+      ecgCtx.strokeStyle = 'rgba(148, 163, 184, 0.18)';
+      ecgCtx.lineWidth = 1 * dpr;
+      ecgCtx.beginPath();
+      ecgCtx.moveTo(0, h * 0.62);
+      ecgCtx.lineTo(w, h * 0.62);
+      ecgCtx.stroke();
+
+      // Draw ECG trace
+      ecgCtx.strokeStyle = isPlaying ? '#34d399' : '#64748b';
+      ecgCtx.lineWidth = 2 * dpr;
+      ecgCtx.lineJoin = 'round';
+      ecgCtx.beginPath();
+
+      const step = w / (ecgHistory.length - 1);
+      for (let i = 0; i < ecgHistory.length; i++) {
+        const x = i * step;
+        const y = h * 0.62 - ecgHistory[i] * (h * 0.48);
+        if (i === 0) ecgCtx.moveTo(x, y);
+        else ecgCtx.lineTo(x, y);
+      }
+      ecgCtx.stroke();
+
+      // Glowing leading dot
+      const lastX = (ecgHistory.length - 1) * step;
+      const lastY = h * 0.62 - ecgHistory[ecgHistory.length - 1] * (h * 0.48);
+      ecgCtx.fillStyle = isPlaying ? '#a7f3d0' : '#94a3b8';
+      ecgCtx.beginPath();
+      ecgCtx.arc(lastX, lastY, 2.5 * dpr, 0, Math.PI * 2);
+      ecgCtx.fill();
+    }
+
+    // =========================================================================
+    // MAIN CARDIAC CYCLE ANIMATION LOOP
+    // =========================================================================
+    function animateCardiacCycle(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+      lastTimestamp = timestamp;
+
+      if (isPlaying) {
+        const beatsPerSecond = bpm / 60;
+        const prevPhase = cyclePhase;
+        cyclePhase = (cyclePhase + dt * beatsPerSecond) % 1;
+
+        // Reset beat sound flags on wrap-around
+        if (cyclePhase < prevPhase) {
+          lubPlayedThisBeat = false;
+          dubPlayedThisBeat = false;
+        }
+
+        // Determine physiological phase & animate heart contraction + valves
+        let heartScale = 1.0;
+        let flowSpeedMultiplier = 0.08;
+
+        if (cyclePhase < 0.15) {
+          // 1. ATRIAL SYSTOLE (Atria contract, AV valves open wide)
+          const t = Math.sin((cyclePhase / 0.15) * Math.PI);
+          heartScale = 1.0 + t * 0.018;
+          flowSpeedMultiplier = 0.11;
+          cardiacPhaseText.textContent = 'Atrial Systole • Ventricular Filling';
+          tricuspidLeaflets.setAttribute('d', 'M 194 351 L 210 364 M 246 351 L 230 364');
+          mitralLeaflets.setAttribute('d', 'M 358 342 L 373 355 M 408 342 L 393 355');
+        } else if (cyclePhase < 0.45) {
+          // 2. VENTRICULAR SYSTOLE ("LUB" sound at 0.15, strong contraction ejecting blood)
+          if (!lubPlayedThisBeat) {
+            triggerHeartSound('lub');
+            lubPlayedThisBeat = true;
+          }
+          const t = Math.sin(((cyclePhase - 0.15) / 0.30) * Math.PI);
+          heartScale = 1.0 - t * 0.055; // Crisp muscular squeeze
+          flowSpeedMultiplier = 0.18 + t * 0.16; // Surge of blood into Aorta & Pulmonary Artery
+          cardiacPhaseText.textContent = 'Ventricular Systole (S1 "Lub") • Ejection';
+          // Snap AV valves closed flat
+          tricuspidLeaflets.setAttribute('d', 'M 194 351 L 220 351 M 246 351 L 220 351');
+          mitralLeaflets.setAttribute('d', 'M 358 342 L 383 342 M 408 342 L 383 342');
+        } else {
+          // 3. CARDIAC DIASTOLE ("DUB" sound at 0.45, heart relaxes & refills)
+          if (!dubPlayedThisBeat && cyclePhase >= 0.45) {
+            triggerHeartSound('dub');
+            dubPlayedThisBeat = true;
+          }
+          const t = Math.sin(((cyclePhase - 0.45) / 0.55) * Math.PI);
+          heartScale = 1.0 + t * 0.025; // Elastic relaxation expansion
+          flowSpeedMultiplier = 0.09;
+          cardiacPhaseText.textContent = 'Cardiac Diastole (S2 "Dub") • Relaxation';
+          // Relaxed open AV valves
+          tricuspidLeaflets.setAttribute('d', 'M 194 351 L 214 360 M 246 351 L 226 360');
+          mitralLeaflets.setAttribute('d', 'M 358 342 L 377 351 M 408 342 L 389 351');
+        }
+
+        // Apply smooth scale transform around heart center (300, 345)
+        heartPumpGroup.setAttribute('transform', `translate(300, 345) scale(${heartScale.toFixed(4)})`);
+
+        // Move blood cells smoothly along pulmonary & systemic paths
+        updateParticlePositions(dt * beatsPerSecond * flowSpeedMultiplier);
+
+        // Push ECG sample
+        ecgHistory.push(getEcgSample(cyclePhase));
+        ecgHistory.shift();
+      } else {
+        // Gentle flatline rest when paused
+        ecgHistory.push(0);
+        ecgHistory.shift();
+      }
+
+      renderEcgCanvas();
+      requestAnimationFrame(animateCardiacCycle);
+    }
+
+    // =========================================================================
+    // UI INTERACTIONS: PLAY/PAUSE, BPM SLIDER, LABELS TOGGLE, PART SELECTION
+    // =========================================================================
+    playToggleBtn.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        playBtnLabel.textContent = 'Pause Pumping';
+        playIcon.innerHTML = '<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+        statusDot.classList.add('animate-soft-pulse');
+        statusText.textContent = `PUMPING • ${bpm} BPM`;
+      } else {
+        playBtnLabel.textContent = 'Resume Pumping';
+        playIcon.innerHTML = '<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        statusDot.classList.remove('animate-soft-pulse');
+        statusText.textContent = `PAUSED • ${bpm} BPM`;
+        cardiacPhaseText.textContent = 'Simulation Paused';
+        heartPumpGroup.setAttribute('transform', 'translate(300, 345) scale(1)');
+      }
+    });
+
+    bpmSlider.addEventListener('input', (e) => {
+      bpm = parseInt(e.target.value, 10);
+      bpmValue.textContent = `${bpm} BPM`;
+      statusText.textContent = `${isPlaying ? 'PUMPING' : 'STANDBY'} • ${bpm} BPM`;
+    });
+
+    toggleLabelsBtn.addEventListener('click', () => {
+      showPins = !showPins;
+      anatomicalPinsLayer.style.display = showPins ? 'block' : 'none';
+      toggleLabelsBtn.textContent = showPins ? 'Hide Pins' : 'Show Pins';
+    });
+
+    /**
+     * Populates the right-hand Inspector Panel with close-up illustration & explanation
+     */
+    function selectHeartPart(partId) {
+      const data = HEART_DATA[partId];
+      if (!data) return;
+      selectedPartId = partId;
+
+      // Highlight selected SVG group(s)
+      document.querySelectorAll('.heart-part').forEach((el) => {
+        if (el.dataset.part === partId) {
+          el.classList.add('selected');
+        } else {
+          el.classList.remove('selected');
+        }
+      });
+
+      // Highlight selected quick-select pill
+      document.querySelectorAll('.part-pill-btn').forEach((btn) => {
+        if (btn.dataset.part === partId) {
+          btn.className = 'part-pill-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#320583] text-white shadow-sm transition-all cursor-pointer';
+        } else {
+          btn.className = 'part-pill-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 hover:bg-[#6c44bb]/15 hover:text-[#320583] transition-all cursor-pointer';
+        }
+      });
+
+      // Update Inspector Card Text & Badges
+      const catBadge = document.getElementById('partCategoryBadge');
+      catBadge.textContent = data.category;
+      catBadge.className = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${data.categoryStyle}`;
+
+      document.getElementById('partCirculationBadge').textContent = data.loop;
+      document.getElementById('partTitle').textContent = data.title;
+      document.getElementById('partSubtitle').textContent = data.subtitle;
+      document.getElementById('partFigureNum').textContent = data.fig;
+      document.getElementById('partIllustrationBox').innerHTML = data.illustration;
+
+      const o2El = document.getElementById('metricO2');
+      o2El.textContent = data.o2;
+      o2El.className = `text-sm sm:text-base font-mono font-bold mt-0.5 ${data.o2Color}`;
+
+      document.getElementById('metricPressure').textContent = data.pressure;
+
+      const bloodEl = document.getElementById('metricBloodState');
+      bloodEl.textContent = data.bloodState;
+      bloodEl.className = `text-sm sm:text-base font-bold mt-0.5 ${data.bloodColor}`;
+
+      document.getElementById('partDescription').textContent = data.description;
+
+      const highlightsList = document.getElementById('partHighlights');
+      highlightsList.innerHTML = data.highlights
+        .map(
+          (item) => `
+          <li class="flex items-start gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#426843] mt-1.5 shrink-0"></span>
+            <span>${item}</span>
+          </li>`
+        )
+        .join('');
+    }
+
+    // Build quick-select pill bar & attach click listeners to SVG regions
+    function initInteractiveAtlas() {
+      const pillsContainer = document.getElementById('partSelectorPills');
+      pillsContainer.innerHTML = '';
+
+      Object.entries(HEART_DATA).forEach(([id, info]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.part = id;
+        btn.textContent = info.shortName;
+        btn.addEventListener('click', () => selectHeartPart(id));
+        pillsContainer.appendChild(btn);
+      });
+
+      // Attach click events to all SVG heart regions & pins
+      document.querySelectorAll('.heart-part').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const partId = el.dataset.part;
+          if (partId) selectHeartPart(partId);
+        });
+      });
+
+      // Default initial selection
+      selectHeartPart('left-ventricle');
+    }
+
+    // Boot Simulator on Window Load
+    window.addEventListener('load', () => {
+      initBloodParticles();
+      initInteractiveAtlas();
+      requestAnimationFrame(animateCardiacCycle);
+    });
+  </script>
+</body>
+</html>
