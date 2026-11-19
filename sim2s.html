@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Anthropocene Reviewed — Interactive Anti-Boring Companion</title>
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Custom Tailwind Configuration for User's Favorite Colors -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              indigo: '#320583',   // Primary Deep Indigo
+              purple: '#6c44bb',   // Vibrant Purple
+              sage: '#426843',     // Sage / Forest Green
+              blue: '#2563EB',     // Classic Clean Blue
+              light: '#F8FAFC',    // Clean Off-White Canvas
+            }
+          },
+          boxShadow: {
+            'soft': '0 4px 20px -2px rgba(50, 5, 131, 0.06)',
+            'glow': '0 8px 30px -4px rgba(108, 68, 187, 0.18)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Base Smoothness & Custom Scrollbar */
+    html {
+      scroll-behavior: smooth;
+      background-color: #F8FAFC;
+      color: #0F172A;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(108, 68, 187, 0.25);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(50, 5, 131, 0.5);
+    }
+
+    /* Subtle Fade-In Animation for Tab Switching */
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-view {
+      animation: fadeSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Typing Dots Animation for Live Chat */
+    @keyframes bounceDot {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .typing-dot {
+      animation: bounceDot 1.3s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand-purple selection:text-white">
+
+  <!-- Toast Notification Container (Replaces alert() cleanly) -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Optional API Key Modal (For standalone GitHub Pages hosting if needed) -->
+  <div id="api-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-view">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-brand-indigo">Live AI Chat Settings</h3>
+        <button onclick="toggleApiModal(false)" class="p-2 text-slate-400 hover:text-slate-700 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+        In preview mode, AI chat works automatically. If you host this file on GitHub Pages and want live Gemini responses, paste a free Gemini API key below (saved only in your browser).
+      </p>
+      <input id="custom-api-key" type="password" placeholder="Paste Gemini API Key (optional)..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple mb-4 font-mono" />
+      <div class="flex justify-end gap-2">
+        <button onclick="clearCustomKey()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition">Clear</button>
+        <button onclick="saveCustomKey()" class="px-4 py-2 text-sm font-semibold text-white bg-brand-indigo hover:bg-brand-purple rounded-xl transition">Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky Minimal Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <!-- Brand Identity -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('overview')">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-indigo via-brand-purple to-brand-blue flex items-center justify-center text-white shadow-sm">
+          <!-- Custom Minimal Star Icon -->
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+          </svg>
+        </div>
+        <div>
+          <span class="font-bold text-slate-900 tracking-tight text-sm sm:text-base block leading-none">Anthropocene<span class="text-brand-purple">.OS</span></span>
+          <span class="text-[11px] font-mono text-slate-500 hidden sm:block">Zero-Fluff ELA Survival Guide</span>
+        </div>
+      </div>
+
+      <!-- Primary Navigation Tabs -->
+      <nav class="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60 overflow-x-auto max-w-full">
+        <button data-tab="overview" onclick="switchTab('overview')" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap bg-white text-brand-indigo shadow-sm">
+          Plot & Arc
+        </button>
+        <button data-tab="essays" onclick="switchTab('essays')" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all whitespace-nowrap">
+          5-Star Essays
+        </button>
+        <button data-tab="themes" onclick="switchTab('themes')" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all whitespace-nowrap">
+          Themes & Quotes
+        </button>
+        <button data-tab="chat" onclick="switchTab('chat')" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all whitespace-nowrap flex items-center gap-1.5">
+          <span>Character Chat</span>
+          <span class="w-2 h-2 rounded-full bg-brand-sage animate-pulse"></span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
+
+    <!-- ========================================== -->
+    <!-- VIEW 1: PLOT & EMOTIONAL ARC (OVERVIEW)    -->
+    <!-- ========================================== -->
+    <section id="view-overview" class="view-section animate-view space-y-8">
+      
+      <!-- Hero Banner -->
+      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-indigo via-[#43159b] to-brand-blue text-white p-6 sm:p-10 shadow-glow">
+        <div class="relative z-10 max-w-2xl space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-mono tracking-wide">
+            <span>★ 4.5 / 5.0 OVERALL VIBE</span>
+            <span>•</span>
+            <span>NO BORING SUMMARIES</span>
+          </div>
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
+            Hate reading? Here’s the entire book in 3 minutes.
+          </h1>
+          <p class="text-blue-100 text-sm sm:text-base leading-relaxed">
+            <em>The Anthropocene Reviewed</em> isn’t a normal novel with a villain and a sword fight. It’s 44 short, deeply personal essays where John Green reviews random parts of human life—from Diet Dr Pepper to Canada Geese—on a 5-star scale.
+          </p>
+          <div class="pt-2 flex flex-wrap gap-3">
+            <button onclick="switchTab('chat')" class="px-5 py-3 rounded-xl bg-white text-brand-indigo font-bold text-sm hover:bg-blue-50 transition shadow-sm flex items-center gap-2">
+              <span>Chat with John Green</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+            </button>
+            <button onclick="switchTab('essays')" class="px-5 py-3 rounded-xl bg-brand-sage/90 hover:bg-brand-sage text-white font-semibold text-sm transition border border-white/20">
+              Explore Top Essays
+            </button>
+          </div>
+        </div>
+        <!-- Minimal Abstract Geometric Decoration -->
+        <div class="hidden md:block absolute -right-12 -bottom-12 w-72 h-72 rounded-full bg-brand-purple/40 blur-2xl"></div>
+        <div class="hidden md:block absolute right-12 top-8 w-36 h-36 rounded-full bg-brand-sage/40 blur-xl"></div>
+      </div>
+
+      <!-- Quick "What Even Is This Book?" 3-Card Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft">
+          <div class="w-10 h-10 rounded-xl bg-brand-indigo/10 text-brand-indigo flex items-center justify-center font-bold font-mono text-sm mb-4">01</div>
+          <h3 class="font-bold text-slate-900 text-base mb-1.5">What is "The Anthropocene"?</h3>
+          <p class="text-sm text-slate-600 leading-relaxed">
+            It’s the current geological age where <strong>humans</strong> are the #1 force reshaping Planet Earth—from climate change to inventing air conditioning and internet memes.
+          </p>
+        </div>
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft">
+          <div class="w-10 h-10 rounded-xl bg-brand-purple/10 text-brand-purple flex items-center justify-center font-bold font-mono text-sm mb-4">02</div>
+          <h3 class="font-bold text-slate-900 text-base mb-1.5">Why a 5-Star Scale?</h3>
+          <p class="text-sm text-slate-600 leading-relaxed">
+            In the modern world, we rate everything (Uber rides, tacos, movies). John uses that goofy rating system as a trick to ask serious questions about grief, joy, and why life matters.
+          </p>
+        </div>
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft">
+          <div class="w-10 h-10 rounded-xl bg-brand-sage/15 text-brand-sage flex items-center justify-center font-bold font-mono text-sm mb-4">03</div>
+          <h3 class="font-bold text-slate-900 text-base mb-1.5">The Hidden "Plot"</h3>
+          <p class="text-sm text-slate-600 leading-relaxed">
+            Even without fictional chapters, the book follows John’s real-life battle with severe anxiety, depression, and the 2020 COVID-19 lockdown—moving from cynicism to hope.
+          </p>
+        </div>
+      </div>
+
+      <!-- Interactive 3-Act Narrative Arc Explorer -->
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-soft">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <span class="text-xs font-mono uppercase tracking-wider text-brand-purple font-semibold">Interactive Story Arc</span>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">How the Book Evolves (Beginning → End)</h2>
+          </div>
+          <span class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg font-medium">Click a stage to inspect</span>
+        </div>
+
+        <!-- Stage Selector Pills -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6" id="arc-tabs">
+          <button onclick="selectArc(0)" class="arc-btn text-left p-4 rounded-2xl border-2 border-brand-indigo bg-brand-indigo/5 transition-all">
+            <div class="text-xs font-mono font-semibold text-brand-indigo mb-1">ACT I • THE SETUP</div>
+            <div class="font-bold text-slate-900 text-sm sm:text-base">Ironic Detachment & Anxiety</div>
+          </button>
+          <button onclick="selectArc(1)" class="arc-btn text-left p-4 rounded-2xl border-2 border-slate-200 hover:border-brand-purple/50 transition-all">
+            <div class="text-xs font-mono font-semibold text-slate-500 mb-1">ACT II • THE TURNING POINT</div>
+            <div class="font-bold text-slate-900 text-sm sm:text-base">Fragility, Grief & Connection</div>
+          </button>
+          <button onclick="selectArc(2)" class="arc-btn text-left p-4 rounded-2xl border-2 border-slate-200 hover:border-brand-sage/50 transition-all">
+            <div class="text-xs font-mono font-semibold text-slate-500 mb-1">ACT III • THE CLIMAX</div>
+            <div class="font-bold text-slate-900 text-sm sm:text-base">2020 Lockdown & Radical Hope</div>
+          </button>
+        </div>
+
+        <!-- Dynamic Arc Display Panel -->
+        <div id="arc-detail" class="bg-slate-50 rounded-2xl p-6 border border-slate-200/70">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 2: 5-STAR ESSAY EXPLORER              -->
+    <!-- ========================================== -->
+    <section id="view-essays" class="view-section hidden animate-view space-y-6">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <span class="text-xs font-mono uppercase tracking-wider text-brand-sage font-semibold">Most Assigned in ELA</span>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">The 5-Star Essay Explorer</h2>
+          <p class="text-sm text-slate-600 mt-1">Filter by star rating to get the 10-second summary and what your teacher wants you to notice.</p>
+        </div>
+
+        <!-- Star Filter Buttons -->
+        <div class="flex flex-wrap gap-1.5 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+          <button onclick="filterEssays('all')" class="essay-filter px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-indigo text-white transition">All</button>
+          <button onclick="filterEssays('5')" class="essay-filter px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">★★★★★ (5)</button>
+          <button onclick="filterEssays('4')" class="essay-filter px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">★★★★ (4–4.5)</button>
+          <button onclick="filterEssays('low')" class="essay-filter px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">★–★★ (1–2)</button>
+        </div>
+      </div>
+
+      <!-- Essays Grid -->
+      <div id="essays-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 3: THEMES & ELA CHEAT SHEET           -->
+    <!-- ========================================== -->
+    <section id="view-themes" class="view-section hidden animate-view space-y-8">
+      <div>
+        <span class="text-xs font-mono uppercase tracking-wider text-brand-blue font-semibold">Zero-Jargon Breakdown</span>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">Core Themes & Class Cheat Codes</h2>
+        <p class="text-sm text-slate-600 mt-1">Everything you need for quizzes, essays, or pretending you read the chapter last night.</p>
+      </div>
+
+      <!-- Themes Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5" id="themes-grid">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Interactive "Sound Smart in Class" Sentence Builder -->
+      <div class="bg-gradient-to-r from-brand-indigo to-brand-purple rounded-3xl p-6 sm:p-8 text-white shadow-glow">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div>
+            <span class="text-xs font-mono uppercase tracking-wider text-blue-200">Instant Participation Saver</span>
+            <h3 class="text-xl font-bold mt-0.5">Need something to say in ELA right now?</h3>
+          </div>
+          <button onclick="generateClassTake()" class="px-4 py-2.5 rounded-xl bg-white text-brand-indigo font-bold text-xs sm:text-sm hover:bg-blue-50 transition shadow-sm shrink-0">
+            ↻ Spin Another Take
+          </button>
+        </div>
+        <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5">
+          <p id="smart-take-text" class="text-sm sm:text-base font-medium leading-relaxed text-white">
+            "What’s cool about John Green’s structure is that rating random things on a 5-star scale starts out feeling like a joke, but by the end of the book, paying close attention to ordinary things becomes how he fights off cynicism."
+          </p>
+          <div class="mt-4 flex items-center justify-between">
+            <span id="smart-take-tag" class="text-xs font-mono text-blue-200">Topic: Structure & Tone</span>
+            <button onclick="copySmartTake()" class="text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+              Copy to Clipboard
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 4: CHARACTERS & LIVE AI CHAT          -->
+    <!-- ========================================== -->
+    <section id="view-chat" class="view-section hidden animate-view">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+        <div>
+          <span class="text-xs font-mono uppercase tracking-wider text-brand-purple font-semibold">Interactive Personas</span>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Chat With Key Figures</h2>
+        </div>
+        <button onclick="toggleApiModal(true)" class="self-start sm:self-auto text-xs font-mono text-slate-500 hover:text-brand-indigo bg-white px-3 py-1.5 rounded-lg border border-slate-200 transition">
+          ⚙ API Key Config
+        </button>
+      </div>
+
+      <!-- Split Chat Studio Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        
+        <!-- Left Sidebar: Character Roster -->
+        <div class="lg:col-span-4 space-y-3" id="character-list">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Right Panel: Active Chat Window -->
+        <div class="lg:col-span-8 bg-white rounded-3xl border border-slate-200/90 shadow-soft flex flex-col h-[560px] overflow-hidden">
+          
+          <!-- Chat Header -->
+          <div id="chat-header" class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Messages Feed -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-5 space-y-4 bg-[#FAFAFC]">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Quick Prompt Suggestions -->
+          <div id="quick-prompts" class="px-4 py-2.5 bg-white border-t border-slate-100 flex gap-2 overflow-x-auto">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Input Bar -->
+          <form onsubmit="handleChatSubmit(event)" class="p-3 sm:p-4 bg-white border-t border-slate-200/80 flex items-center gap-2">
+            <input 
+              id="chat-input" 
+              type="text" 
+              autocomplete="off"
+              placeholder="Ask anything about the book, themes, or your homework..." 
+              class="flex-1 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-slate-900 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-purple transition"
+            />
+            <button 
+              id="chat-send-btn"
+              type="submit" 
+              class="px-4 py-3 rounded-xl bg-brand-indigo hover:bg-brand-purple text-white font-semibold text-sm transition flex items-center gap-1.5 shrink-0 shadow-sm disabled:opacity-50"
+            >
+              <span>Send</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Minimal Clean Footer -->
+  <footer class="border-t border-slate-200/80 bg-white py-5 mt-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+      <span>Built for surviving ELA • <em>The Anthropocene Reviewed</em> Companion</span>
+      <span class="font-mono text-brand-sage font-medium">I give this study tool ★★★★½ stars.</span>
+    </div>
+  </footer>
+
+  <!-- ========================================== -->
+  <!-- APPLICATION LOGIC & DATA                   -->
+  <!-- ========================================== -->
+  <script>
+    // ---------------------------------------------------------
+    // 1. RICH LITERARY DATA (NO FLUFF, STUDENT-FRIENDLY)
+    // ---------------------------------------------------------
+    const ARC_STAGES = [
+      {
+        title: "Act I: Ironic Detachment & Climate Anxiety",
+        subtitle: "Early Essays (e.g., Halley's Comet, Kentucky Bluegrass, Diet Dr Pepper)",
+        summary: "John introduces the 'Anthropocene'—our current geological era defined by human domination of Earth. At first, rating big concepts on a 5-star scale feels funny and slightly cynical. Beneath the humor, John is struggling with OCD, intrusive thoughts, and dread about humanity's impact on the planet.",
+        keyShift: "Shift: Using trivia and star ratings as a shield against overwhelming anxiety.",
+        accentColor: "#320583"
+      },
+      {
+        title: "Act II: Human Fragility, Grief & Connection",
+        subtitle: "Middle Essays (e.g., Viral Meningitis, You'll Never Walk Alone, Scratch 'n' Sniff)",
+        summary: "The essays turn deeply personal. John recounts surviving terrifying viral meningitis, working as a student chaplain at a children's hospital, and mourning his close friend Amy Krouse Rosenthal. He realizes that human strength isn't about being invincible—it's about showing up for each other when things break.",
+        keyShift: "Shift: Moving from lonely observation to shared human vulnerability.",
+        accentColor: "#6c44bb"
+      },
+      {
+        title: "Act III: 2020 Lockdown & Radical Hope",
+        subtitle: "Final Essays (e.g., Plague, Auld Lang Syne, Postscript)",
+        summary: "Written during the isolation of the COVID-19 pandemic, the 5-star scale stops being a joke. When the world shuts down, noticing small beauties—a song, a tree, a memory—becomes an act of survival. John concludes that falling in love with the world, despite knowing everything is temporary, is the whole point.",
+        keyShift: "Shift: Choosing wonder and hope over despair.",
+        accentColor: "#426843"
+      }
+    ];
+
+    const ESSAYS = [
+      {
+        title: "You'll Never Walk Alone",
+        stars: 5,
+        category: "5",
+        badge: "Fan Favorite",
+        tldr: "A showtune from 1945 became the ultimate soccer anthem for Liverpool FC—and a lifeline for John during heartbreak and grief.",
+        whyRating: "5 stars because art becomes transcendent when millions of strangers sing it together to hold each other up.",
+        elaCheat: "Great example of how pop culture transforms into sacred community ritual. Mention how John connects sports fandom to empathy.",
+        quote: "We think of ourselves as individuals, but we are also a chorus."
+      },
+      {
+        title: "Auld Lang Syne",
+        stars: 5,
+        category: "5",
+        badge: "Book Finale",
+        tldr: "Written in 2020 lockdown, this final essay breaks down the New Year's Eve song nobody actually knows the lyrics to.",
+        whyRating: "5 stars for capturing both the ache of missing the past and the courage to toast the future anyway.",
+        elaCheat: "Crucial for any essay on the book's ending! It proves the thesis: hope isn't ignoring pain, it's loving the world anyway.",
+        quote: "We’re here because we’re here because we’re here because we’re here."
+      },
+      {
+        title: "Halley's Comet",
+        stars: 4.5,
+        category: "4",
+        badge: "Cosmic Perspective",
+        tldr: "Mark Twain was born and died with Halley's Comet. John saw it as a kid in 1986 and was disappointed—until he realized what it actually meant.",
+        whyRating: "4.5 stars because human anticipation rarely matches reality, yet looking up at the sky connects us across centuries.",
+        elaCheat: "Use this to talk about 'perspective' and 'time'—comparing a tiny human lifespan to cosmic history.",
+        quote: "The comet doesn't care about us, and yet we care so deeply about the comet."
+      },
+      {
+        title: "Diet Dr Pepper",
+        stars: 4,
+        category: "4",
+        badge: "Most Relatable",
+        tldr: "John confesses his genuine, unironic obsession with Diet Dr Pepper—a drink that tastes like nothing found in nature.",
+        whyRating: "4 stars for the weird comfort of artificial human inventions that bring tiny sparks of joy to regular days.",
+        elaCheat: "Shows John's anti-snobbery. He argues that 'unimportant' pop-culture pleasures deserve serious literary attention.",
+        quote: "There is nothing natural about Diet Dr Pepper, and that is precisely why I love it."
+      },
+      {
+        title: "Canada Geese",
+        stars: 2,
+        category: "low",
+        badge: "Funniest Essay",
+        tldr: "Everyone hates aggressive, pooping Canada geese—until John explains they only thrive in cities because humans destroyed their wetlands.",
+        whyRating: "2 stars: still scary feathered dinosaurs, but they deserve respect for surviving human expansion.",
+        elaCheat: "Classic Anthropocene irony: humans reshape the planet, then get mad at animals for adapting to the world we built.",
+        quote: "They are not invaders; they are refugees of our landscaping."
+      },
+      {
+        title: "The Hall of Presidents",
+        stars: 1.5,
+        category: "low",
+        badge: "Sharp Critique",
+        tldr: "Disney World's animatronic U.S. Presidents tell a smooth, sanitized story of American history that hides real injustices.",
+        whyRating: "1.5 stars for turning messy, painful real history into a comfortable theme-park illusion.",
+        elaCheat: "Shows John's critical side—he critiques nostalgia when it's used to erase historical truth.",
+        quote: "Nostalgia is a powerful sedative, and Disney World is its finest pharmacy."
+      },
+      {
+        title: "Viral Meningitis",
+        stars: 1,
+        category: "low",
+        badge: "Deeply Personal",
+        tldr: "John describes the agonizing pain of catching viral meningitis and realizing how fragile the human body and brain really are.",
+        whyRating: "1 star because severe pain isn't noble or poetic—it just hurts, though surviving it changes how you value ordinary days.",
+        elaCheat: "Key turning point in John's character arc: strips away intellectual detachment and forces raw honesty.",
+        quote: "Pain doesn't teach you anything; surviving pain teaches you how fragile you are."
+      },
+      {
+        title: "Scratch 'n' Sniff Stickers",
+        stars: 4,
+        category: "4",
+        badge: "Nostalgia",
+        tldr: "Why smelling a fake grape sticker from 1984 can instantly teleport your brain back to elementary school.",
+        whyRating: "4 stars for how smell triggers memory more powerfully than any photo ever could.",
+        elaCheat: "Great for analyzing sensory imagery and how memory anchors human identity.",
+        quote: "Our memories are stored not in vaults, but in fragile sensory triggers."
+      }
+    ];
+
+    const THEMES = [
+      {
+        title: "Paying Attention as Love",
+        tag: "Core Thesis",
+        color: "brand-indigo",
+        plainEnglish: "When you actually stop scrolling and deeply research or notice something—even a goose or a sticker—you start caring about it. Attention is the opposite of cynicism.",
+        evidence: "Essays: 'Scratch 'n' Sniff Stickers', 'Capacity for Wonder'"
+      },
+      {
+        title: "The Paradox of the Anthropocene",
+        tag: "Human Impact",
+        color: "brand-sage",
+        plainEnglish: "Humans are powerful enough to change Earth's climate and land on the moon, yet too fragile to stop a microscopic virus or control our own anxiety.",
+        evidence: "Essays: 'Canada Geese', 'Kentucky Bluegrass', 'Viral Meningitis'"
+      },
+      {
+        title: "Radical Hope vs. Toxic Positivity",
+        tag: "Mental Health",
+        color: "brand-purple",
+        plainEnglish: "John never pretends everything is fine. Real hope means admitting the world is broken and scary, and choosing to love and care for it anyway.",
+        evidence: "Essays: 'Auld Lang Syne', 'You'll Never Walk Alone'"
+      },
+      {
+        title: "We Survive Together, Not Alone",
+        tag: "Community",
+        color: "brand-blue",
+        plainEnglish: "Individualism is a myth. Everything from language to medicine to soccer anthems exists because humans pass care from one generation to the next.",
+        evidence: "Essays: 'You'll Never Walk Alone', 'Halley's Comet'"
+      }
+    ];
+
+    const CLASS_TAKES = [
+      {
+        text: "What’s cool about John Green’s structure is that rating random things on a 5-star scale starts out feeling like a joke, but by the end of the book, paying close attention to ordinary things becomes how he fights off cynicism.",
+        tag: "Topic: Structure & Tone"
+      },
+      {
+        text: "In 'Canada Geese,' John flips the script on nature writing—he points out that humans ruined wetland habitats and then got annoyed when geese adapted to our suburban lawns.",
+        tag: "Topic: The Anthropocene / Irony"
+      },
+      {
+        text: "John Green separates 'nostalgia' from 'hope.' In 'The Hall of Presidents,' nostalgia hides ugly truths, whereas in 'Auld Lang Syne,' hope means facing reality with other people.",
+        tag: "Topic: Theme Comparison"
+      },
+      {
+        text: "Even though it's non-fiction essays, there's a clear character arc: John starts off anxious and detached, and ends up vulnerable and grateful during the 2020 lockdown.",
+        tag: "Topic: Narrative Arc"
+      }
+    ];
+
+    const CHARACTERS = [
+      {
+        id: "john",
+        name: "John Green",
+        role: "Author & Narrator",
+        stars: "★★★★½",
+        badgeColor: "bg-brand-indigo",
+        tagline: "Anxious, nerdy, obsessed with Diet Dr Pepper & finding hope.",
+        bio: "The voice of the book. He uses obscure history, science, and personal confessions about OCD and depression to figure out how to fall in love with a flawed world.",
+        starterPrompts: [
+          "Summarize the whole book in 3 chill sentences.",
+          "Why did you write this on a 5-star scale?",
+          "Help me come up with an ELA thesis statement!",
+          "What's your obsession with Diet Dr Pepper?"
+        ],
+        greeting: "Hey! I'm John. Look, I know being forced to read a book for ELA can make it feel like homework instead of a conversation. Ask me anything—whether you need a 30-second breakdown of an essay, help with a thesis, or just want to know why I gave Canada Geese two stars.",
+        systemPrompt: "You are John Green, author of 'The Anthropocene Reviewed'. Speak in your authentic, warm, self-deprecating, intellectually curious, empathetic voice. You are talking to a high school student who hates ELA and reading, so keep answers concise (2-4 short paragraphs max), engaging, zero-pretension, and genuinely helpful for understanding your book's essays, themes, and personal arc. Occasionally reference your love of Diet Dr Pepper, Liverpool FC, or obscure historical facts when relevant."
+      },
+      {
+        id: "goose",
+        name: "A Canada Goose",
+        role: "Iconic Essay Subject (2★)",
+        stars: "★★☆☆☆",
+        badgeColor: "bg-brand-sage",
+        tagline: "Feathered dinosaur. Zero chill. Misunderstood survivor.",
+        bio: "Featured in John's hilarious 2-star review. Loud, territorial, and unbothered by traffic—yet proof of how wildlife adapts to human-built suburbs.",
+        starterPrompts: [
+          "Why did John only give you 2 stars?!",
+          "What's your beef with humans?",
+          "Explain the 'Anthropocene' from a goose's POV.",
+          "Give me a funny quote for class."
+        ],
+        greeting: "*HONK.* Listen up, human. John Green gave my entire species 2 out of 5 stars just because we hiss at joggers and leave droppings on soccer fields. Ask me what it's actually like living in YOUR Anthropocene.",
+        systemPrompt: "You are a witty, slightly sassy, fiercely proud Canada Goose from John Green's essay 'Canada Geese' in 'The Anthropocene Reviewed'. Start or sprinkle in a subtle *honk* when fitting, be hilarious, but actually teach the student the real literary point of the essay: humans destroyed natural wetlands and built lush suburban lawns, so geese adapted to human environments and are unfairly blamed as 'pests'. Keep responses punchy and fun."
+      },
+      {
+        id: "sarah",
+        name: "Sarah Urist Green",
+        role: "Partner & Art Curator",
+        stars: "★★★★★",
+        badgeColor: "bg-brand-purple",
+        tagline: "Grounded, creative anchor who keeps John tethered to reality.",
+        bio: "John's wife and an art curator. She appears throughout the book as a voice of calm wisdom, reminding John to look closely at art, beauty, and real life outside his anxious thoughts.",
+        starterPrompts: [
+          "How does John change over the course of the book?",
+          "Why does art matter in The Anthropocene Reviewed?",
+          "What's the biggest theme I should write about?",
+          "How did 2020 change the ending of the book?"
+        ],
+        greeting: "Hi there! I'm Sarah. Living with John means hearing endless deep dives into obscure history and 5-star ratings of random objects—but watching him write this book during lockdown was really about him learning how to stay present. What can I help you decode for class?",
+        systemPrompt: "You are Sarah Urist Green, art curator and John Green's wife, appearing in 'The Anthropocene Reviewed'. Speak in a grounded, insightful, encouraging, and clear tone. Help a student who dislikes ELA understand how John's perspective evolves across the book, especially regarding art, paying attention, mental health, and hope during the 2020 pandemic. Keep answers concise and easy to read."
+      },
+      {
+        id: "amy",
+        name: "Amy Krouse Rosenthal",
+        role: "Beloved Friend & Author",
+        stars: "★★★★★",
+        badgeColor: "bg-brand-blue",
+        tagline: "Champion of noticing small wonders & paying attention.",
+        bio: "John's late friend and fellow author whose life and work deeply shaped the book's philosophy: paying attention to tiny, everyday magic is the highest form of love.",
+        starterPrompts: [
+          "What does 'paying attention' mean in this book?",
+          "How do you influence John's message of hope?",
+          "Give me an easy theme to explain in class.",
+          "Why isn't this book depressing?"
+        ],
+        greeting: "Hello friend! Don't worry if you're not a big reader—the real secret of this book isn't memorizing chapters, it's learning to notice the weird, wonderful details of being alive right now. What part of the book are we unpacking today?",
+        systemPrompt: "You are Amy Krouse Rosenthal, the beloved late author and close friend of John Green referenced in 'The Anthropocene Reviewed'. Speak with warmth, curiosity, lightness, and emotional clarity. Help the student understand the book's core themes of gratitude, paying attention to small everyday wonders, grief, and choosing hope without sounding preachy or overly academic. Keep responses concise."
+      }
+    ];
+
+    // ---------------------------------------------------------
+    // 2. APPLICATION STATE
+    // ---------------------------------------------------------
+    let currentTab = 'overview';
+    let currentArcIndex = 0;
+    let currentEssayFilter = 'all';
+    let takeIndex = 0;
+    let activeCharacterId = 'john';
+    let isGenerating = false;
+
+    // Store chat histories per character so switching personas keeps context
+    const chatHistories = {
+      john: [{ role: 'model', text: CHARACTERS[0].greeting }],
+      goose: [{ role: 'model', text: CHARACTERS[1].greeting }],
+      sarah: [{ role: 'model', text: CHARACTERS[2].greeting }],
+      amy: [{ role: 'model', text: CHARACTERS[3].greeting }]
+    };
+
+    // ---------------------------------------------------------
+    // 3. INITIALIZATION & NAVIGATION
+    // ---------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      selectArc(0);
+      renderEssays('all');
+      renderThemes();
+      renderCharacterSidebar();
+      renderChatWindow();
+      
+      // Load saved custom key if user added one on GitHub
+      const savedKey = localStorage.getItem('gemini_custom_key');
+      if (savedKey) {
+        document.getElementById('custom-api-key').value = savedKey;
+      }
+    });
+
+    function switchTab(tabName) {
+      currentTab = tabName;
+
+      // Update Tab Buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.dataset.tab === tabName) {
+          btn.classList.add('bg-white', 'text-brand-indigo', 'shadow-sm', 'font-semibold');
+          btn.classList.remove('text-slate-600', 'font-medium');
+        } else {
+          btn.classList.remove('bg-white', 'text-brand-indigo', 'shadow-sm', 'font-semibold');
+          btn.classList.add('text-slate-600', 'font-medium');
+        }
+      });
+
+      // Toggle Sections
+      document.querySelectorAll('.view-section').forEach(sec => {
+        sec.classList.add('hidden');
+      });
+      const activeSec = document.getElementById(`view-${tabName}`);
+      if (activeSec) {
+        activeSec.classList.remove('hidden');
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 4. OVERVIEW: ARC SELECTOR
+    // ---------------------------------------------------------
+    function selectArc(index) {
+      currentArcIndex = index;
+      const buttons = document.querySelectorAll('.arc-btn');
+      buttons.forEach((btn, i) => {
+        if (i === index) {
+          btn.classList.add('border-brand-indigo', 'bg-brand-indigo/5');
+          btn.classList.remove('border-slate-200');
+        } else {
+          btn.classList.remove('border-brand-indigo', 'bg-brand-indigo/5');
+          btn.classList.add('border-slate-200');
+        }
+      });
+
+      const stage = ARC_STAGES[index];
+      const detailBox = document.getElementById('arc-detail');
+      detailBox.innerHTML = `
+        <div class="space-y-3 animate-view">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-lg font-bold text-slate-900">${stage.title}</h3>
+            <span class="text-xs font-mono px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-600">${stage.subtitle}</span>
+          </div>
+          <p class="text-sm sm:text-base text-slate-700 leading-relaxed">${stage.summary}</p>
+          <div class="pt-2 flex items-center gap-2 text-xs sm:text-sm font-semibold text-brand-sage">
+            <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+            <span>${stage.keyShift}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // ---------------------------------------------------------
+    // 5. ESSAY EXPLORER
+    // ---------------------------------------------------------
+    function renderStarsSVG(rating) {
+      const fullStars = Math.floor(rating);
+      const hasHalf = rating % 1 !== 0;
+      let html = '<div class="flex items-center gap-0.5 text-amber-400" title="' + rating + ' out of 5 stars">';
+      for (let i = 0; i < 5; i++) {
+        if (i < fullStars) {
+          html += `<svg class="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`;
+        } else if (i === fullStars && hasHalf) {
+          html += `<svg class="w-4 h-4 text-amber-400" viewBox="0 0 20 20"><defs><linearGradient id="halfGrad"><stop offset="50%" stop-color="currentColor"/><stop offset="50%" stop-color="#CBD5E1"/></linearGradient></defs><path fill="url(#halfGrad)" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`;
+        } else {
+          html += `<svg class="w-4 h-4 text-slate-200 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`;
+        }
+      }
+      html += `<span class="ml-1.5 text-xs font-mono font-bold text-slate-700">${rating}/5</span></div>`;
+      return html;
+    }
+
+    function filterEssays(filter) {
+      currentEssayFilter = filter;
+      document.querySelectorAll('.essay-filter').forEach(btn => {
+        if (btn.getAttribute('onclick').includes(`'${filter}'`)) {
+          btn.classList.add('bg-brand-indigo', 'text-white');
+          btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
+        } else {
+          btn.classList.remove('bg-brand-indigo', 'text-white');
+          btn.classList.add('text-slate-600', 'hover:bg-slate-100');
+        }
+      });
+      renderEssays(filter);
+    }
+
+    function renderEssays(filter) {
+      const grid = document.getElementById('essays-grid');
+      const filtered = filter === 'all' ? ESSAYS : ESSAYS.filter(e => e.category === filter);
+
+      grid.innerHTML = filtered.map((essay, idx) => `
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-soft flex flex-col justify-between hover:border-brand-purple/40 transition-all">
+          <div class="space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="inline-block text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-md bg-brand-purple/10 text-brand-purple mb-1.5">${essay.badge}</span>
+                <h3 class="text-lg font-bold text-slate-900">${essay.title}</h3>
+              </div>
+              ${renderStarsSVG(essay.stars)}
+            </div>
+
+            <p class="text-sm text-slate-700 leading-relaxed">
+              <strong class="text-slate-900">10-Sec TL;DR:</strong> ${essay.tldr}
+            </p>
+
+            <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200/60 space-y-1.5">
+              <div class="text-xs font-mono font-semibold text-brand-sage uppercase">ELA Class Cheat Code</div>
+              <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">${essay.elaCheat}</p>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+            <span class="text-xs italic text-slate-500 truncate max-w-[70%]">"${essay.quote}"</span>
+            <button onclick="copyText('${essay.quote.replace(/'/g, "\\'")} — John Green')" class="text-xs font-semibold text-brand-indigo hover:text-brand-purple px-2.5 py-1 rounded-lg bg-brand-indigo/5 hover:bg-brand-indigo/10 transition shrink-0">
+              Copy Quote
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ---------------------------------------------------------
+    // 6. THEMES & CLASS TAKE GENERATOR
+    // ---------------------------------------------------------
+    function renderThemes() {
+      const grid = document.getElementById('themes-grid');
+      grid.innerHTML = THEMES.map(theme => `
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-soft space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">${theme.tag}</span>
+            <span class="w-2.5 h-2.5 rounded-full bg-${theme.color}"></span>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900">${theme.title}</h3>
+          <p class="text-sm text-slate-600 leading-relaxed">${theme.plainEnglish}</p>
+          <div class="pt-2 text-xs font-mono text-brand-indigo font-medium">
+            Key Proof: ${theme.evidence}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function generateClassTake() {
+      takeIndex = (takeIndex + 1) % CLASS_TAKES.length;
+      const take = CLASS_TAKES[takeIndex];
+      document.getElementById('smart-take-text').textContent = `"${take.text}"`;
+      document.getElementById('smart-take-tag').textContent = take.tag;
+    }
+
+    function copySmartTake() {
+      const text = document.getElementById('smart-take-text').textContent;
+      copyText(text);
+    }
+
+    // ---------------------------------------------------------
+    // 7. CHARACTER ROSTER & LIVE AI CHAT (GEMINI API)
+    // ---------------------------------------------------------
+    function renderCharacterSidebar() {
+      const list = document.getElementById('character-list');
+      list.innerHTML = CHARACTERS.map(char => {
+        const isActive = char.id === activeCharacterId;
+        return `
+          <button onclick="selectCharacter('${char.id}')" class="w-full text-left p-4 rounded-2xl border-2 transition-all ${isActive ? 'border-brand-indigo bg-white shadow-soft' : 'border-slate-200/80 bg-white/60 hover:bg-white'}">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-xl ${char.badgeColor} text-white flex items-center justify-center font-bold text-base shrink-0 shadow-sm">
+                ${char.name.charAt(0)}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-1">
+                  <span class="font-bold text-slate-900 text-sm truncate">${char.name}</span>
+                  <span class="text-xs font-mono text-amber-500 font-bold">${char.stars}</span>
+                </div>
+                <span class="text-xs text-slate-500 block truncate">${char.role}</span>
+              </div>
+            </div>
+            <p class="text-xs text-slate-600 mt-2.5 leading-relaxed">${char.tagline}</p>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectCharacter(charId) {
+      activeCharacterId = charId;
+      renderCharacterSidebar();
+      renderChatWindow();
+    }
+
+    function renderChatWindow() {
+      const char = CHARACTERS.find(c => c.id === activeCharacterId);
+      const history = chatHistories[activeCharacterId];
+
+      // Header
+      document.getElementById('chat-header').innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl ${char.badgeColor} text-white flex items-center justify-center font-bold">
+            ${char.name.charAt(0)}
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-slate-900 text-sm sm:text-base">${char.name}</h3>
+              <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-brand-sage/15 text-brand-sage font-semibold">Online</span>
+            </div>
+            <p class="text-xs text-slate-500">${char.role}</p>
+          </div>
+        </div>
+        <button onclick="resetCharacterChat()" class="text-xs text-slate-500 hover:text-brand-indigo font-medium px-2.5 py-1.5 rounded-lg hover:bg-slate-200/60 transition">
+          Reset Chat
+        </button>
+      `;
+
+      // Messages
+      const feed = document.getElementById('chat-messages');
+      feed.innerHTML = history.map((msg, idx) => {
+        if (msg.role === 'user') {
+          return `
+            <div class="flex justify-end">
+              <div class="max-w-[82%] bg-brand-indigo text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
+                ${escapeHTML(msg.text)}
+              </div>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="flex justify-start items-start gap-2.5">
+              <div class="w-7 h-7 rounded-lg ${char.badgeColor} text-white flex items-center justify-center text-xs font-bold shrink-0 mt-1">
+                ${char.name.charAt(0)}
+              </div>
+              <div class="max-w-[85%] bg-white border border-slate-200/90 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 text-sm leading-relaxed shadow-sm space-y-2">
+                <div class="whitespace-pre-line">${formatSimpleMarkdown(msg.text)}</div>
+                <div class="pt-1 flex justify-end">
+                  <button onclick="copyText(\`${msg.text.replace(/`/g, "'").replace(/\\/g, "\\\\")}\`)" class="text-[11px] font-mono text-slate-400 hover:text-brand-indigo transition">
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+
+      // Add typing bubble if waiting on AI
+      if (isGenerating) {
+        feed.innerHTML += `
+          <div class="flex justify-start items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg ${char.badgeColor} text-white flex items-center justify-center text-xs font-bold shrink-0">
+              ${char.name.charAt(0)}
+            </div>
+            <div class="bg-white border border-slate-200/90 rounded-2xl px-4 py-3 flex items-center gap-1.5 shadow-sm">
+              <span class="w-2 h-2 rounded-full bg-brand-purple typing-dot"></span>
+              <span class="w-2 h-2 rounded-full bg-brand-purple typing-dot"></span>
+              <span class="w-2 h-2 rounded-full bg-brand-purple typing-dot"></span>
+            </div>
+          </div>
+        `;
+      }
+
+      feed.scrollTop = feed.scrollHeight;
+
+      // Quick Prompts
+      document.getElementById('quick-prompts').innerHTML = char.starterPrompts.map(prompt => `
+        <button onclick="sendQuickPrompt('${prompt.replace(/'/g, "\\'")}')" class="text-xs font-medium text-slate-600 hover:text-brand-indigo bg-slate-100 hover:bg-brand-indigo/10 px-3 py-1.5 rounded-full whitespace-nowrap transition shrink-0">
+          ${prompt}
+        </button>
+      `).join('');
+    }
+
+    function resetCharacterChat() {
+      const char = CHARACTERS.find(c => c.id === activeCharacterId);
+      chatHistories[activeCharacterId] = [{ role: 'model', text: char.greeting }];
+      renderChatWindow();
+      showToast(`Reset conversation with ${char.name}`);
+    }
+
+    function sendQuickPrompt(text) {
+      if (isGenerating) return;
+      document.getElementById('chat-input').value = text;
+      handleChatSubmit(new Event('submit'));
+    }
+
+    async function handleChatSubmit(e) {
+      e.preventDefault();
+      if (isGenerating) return;
+
+      const inputEl = document.getElementById('chat-input');
+      const userMessage = inputEl.value.trim();
+      if (!userMessage) return;
+
+      inputEl.value = '';
+      const char = CHARACTERS.find(c => c.id === activeCharacterId);
+      chatHistories[activeCharacterId].push({ role: 'user', text: userMessage });
+
+      isGenerating = true;
+      document.getElementById('chat-send-btn').disabled = true;
+      renderChatWindow();
+
+      try {
+        const reply = await fetchGeminiCharacterReply(char, chatHistories[activeCharacterId]);
+        chatHistories[activeCharacterId].push({ role: 'model', text: reply });
+      } catch (err) {
+        // Smart offline/GitHub fallback so the app ALWAYS works smoothly
+        const fallbackReply = generateSmartFallback(char, userMessage);
+        chatHistories[activeCharacterId].push({ role: 'model', text: fallbackReply });
+      } finally {
+        isGenerating = false;
+        document.getElementById('chat-send-btn').disabled = false;
+        renderChatWindow();
+      }
+    }
+
+    // Gemini API Call with Exponential Backoff (Follows Platform Specifications)
+    async function fetchGeminiCharacterReply(character, history) {
+      const apiKey = localStorage.getItem('gemini_custom_key') || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+      // Map conversation history to Gemini format (skip initial local greeting if needed, keep clean alternating turns)
+      const contents = history.slice(1).map(item => ({
+        role: item.role === 'user' ? 'user' : 'model',
+        parts: [{ text: item.text }]
+      }));
+
+      const payload = {
+        contents: contents,
+        systemInstruction: {
+          parts: [{ text: character.systemPrompt }]
+        }
+      };
+
+      const maxRetries = 3;
+      const delays = [1000, 2000, 4000];
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const result = await response.json();
+          const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) return text;
+          throw new Error("Empty response");
+        } catch (error) {
+          if (attempt < maxRetries) {
+            await new Promise(res => setTimeout(res, delays[attempt]));
+          } else {
+            throw error;
+          }
+        }
+      }
+    }
+
+    // Built-in Smart Fallback if hosted externally without an API key
+    function generateSmartFallback(char, question) {
+      const q = question.toLowerCase();
+      if (char.id === 'goose') {
+        return "*HONK!* Let me break it down for your ELA class: John Green gave us Canada Geese 2 stars because we hiss at humans, yet he admits humans destroyed our natural wetlands and replaced them with suburban lawns. Basically, we're just adapting to the Anthropocene you guys built!";
+      }
+      if (q.includes('thesis') || q.includes('essay')) {
+        return `Here’s a strong, ready-to-use ELA thesis for you:\n\n"In *The Anthropocene Reviewed*, John Green uses the seemingly trivial format of 5-star consumer reviews to confront human fragility, ultimately arguing that paying deliberate attention to ordinary wonders is an act of radical hope against modern despair."`;
+      }
+      if (q.includes('summary') || q.includes('whole book') || q.includes('about')) {
+        return `Here’s the whole book in 3 bullets:\n• **The Concept:** 44 personal essays reviewing facets of our human-centered planet (the Anthropocene) on a 5-star scale.\n• **The Struggle:** John wrestles with severe anxiety, grief, and how fragile human life really is.\n• **The Ending:** Written during the 2020 lockdown, he concludes that even though nothing lasts forever, falling in love with the world is worth it.`;
+      }
+      return `Great question! In *The Anthropocene Reviewed*, that connects directly to how humans leave fingerprints on everything—from climate change to Diet Dr Pepper—while still searching for connection and meaning. (Tip: If you're hosting this on GitHub Pages, click 'API Key Config' at the top right to plug in a free Gemini key for unlimited custom AI replies!)`;
+    }
+
+    // ---------------------------------------------------------
+    // 8. UTILITIES (CLIPBOARD, TOASTS, MODAL)
+    // ---------------------------------------------------------
+    function copyText(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Copied to clipboard!');
+      } catch (err) {
+        showToast('Could not copy text');
+      }
+      document.body.removeChild(textarea);
+    }
+
+    function showToast(message) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-view';
+      toast.innerHTML = `<span class="w-2 h-2 rounded-full bg-brand-sage"></span><span>${escapeHTML(message)}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => toast.remove(), 250);
+      }, 2400);
+    }
+
+    function toggleApiModal(show) {
+      const modal = document.getElementById('api-modal');
+      if (show) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function saveCustomKey() {
+      const val = document.getElementById('custom-api-key').value.trim();
+      if (val) {
+        localStorage.setItem('gemini_custom_key', val);
+        showToast('Gemini API Key saved locally!');
+      }
+      toggleApiModal(false);
+    }
+
+    function clearCustomKey() {
+      localStorage.removeItem('gemini_custom_key');
+      document.getElementById('custom-api-key').value = '';
+      showToast('API Key cleared');
+      toggleApiModal(false);
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    function formatSimpleMarkdown(text) {
+      let safe = escapeHTML(text);
+      // Bold **text**
+      safe = safe.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-900">$1</strong>');
+      // Italics *text*
+      safe = safe.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+      return safe;
+    }
+  </script>
+</body>
+</html>
